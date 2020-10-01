@@ -78,6 +78,5 @@ createAcoautorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
   A=list_to_atom(lists:flatten(io_lib:format("actuator~p", [IDX1]))),
   B=list_to_atom(lists:flatten(io_lib:format("neuron~p", [IDX2]))),
   digraph:add_edge(G,B, A,5*(1.0 - rand:uniform())),
-  createAcoautorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum)
+  createAcoautorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum).
 
-.
