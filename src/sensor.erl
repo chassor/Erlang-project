@@ -2,7 +2,7 @@
 -export([]).
 -compile(export_all).
 
-
+g()->ok.
 generate_sensor(NN_manger_PID,Node)->
   spawn(Node,?MODULE,init,[NN_manger_PID]).
 

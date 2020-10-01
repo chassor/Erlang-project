@@ -1,6 +1,6 @@
 -module(neuron).
 -export([generate_neuron/2,loop/6,init/1]).
-
+-compile(export_all).
 
 generate_neuron(NN_manger_PID,Node)->
   spawn(Node,?MODULE,init,[NN_manger_PID]).

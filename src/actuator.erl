@@ -1,5 +1,8 @@
 -module(actuator).
+-export([]).
 -compile(export_all).
+
+
 
 generate_actuator(ExoSelf_PId,Node)->
   spawn(Node,?MODULE,init,[ExoSelf_PId]).
