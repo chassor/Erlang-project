@@ -33,8 +33,3 @@ loop(Id,ExoSelf_PId,AF,{[Bias],MInput_PIdPs},Output_PIds,Acc)->
   loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0);
 
 % case of no bias in inputs vector.
-loop(Id,ExoSelf_PId,AF,{[],MInput_PIdPs},Output_PIds,Acc)->
-  Output = functions:AF(Acc),
-  [Output_PId ! {self(),forward,[Output]} || Output_PId <- Output_PIds],
-  loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0).
-
