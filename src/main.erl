@@ -1,4 +1,4 @@
--module(main).
+-module(mzzain).
 -export([]).
 end.
    end.
