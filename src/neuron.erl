@@ -29,11 +29,11 @@ loop(Id,NN_manger_PID,AF,{[{Input_PId,Weight}|Input_PIdPs],MInput_PIdPs},Output_
 % case of bias in last element in inputs vector.
 loop(Id,ExoSelf_PId,AF,{[Bias],MInput_PIdPs},Output_PIds,Acc)->
   Output = functions:AF(Acc+Bias),
-  [Output_PId ! {self(),forward,[Output]} || Output_PId <- Output_PIds],
+  [Output_PId ! {self(),forward,Output} || Output_PId <- Output_PIds],
   loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0);
 
 % case of no bias in inputs vector.
 loop(Id,ExoSelf_PId,AF,{[],MInput_PIdPs},Output_PIds,Acc)->
   Output = functions:AF(Acc),
-  [Output_PId ! {self(),forward,[Output]} || Output_PId <- Output_PIds],
+  [Output_PId ! {self(),forward,Output} || Output_PId <- Output_PIds],
   loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0).

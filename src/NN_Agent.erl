@@ -28,7 +28,10 @@ createNeuronsLayers(G,NumOfLayers,NumOfNeuronsEachLayer),
   A=digraph:vertices(G),
   B=digraph:edges(G),
   C= [digraph:edge(G,E) || E <- B],
-  X= [digraph:vertex(G,V) || V <- A],
+  VertexList= [digraph:vertex(G,V) || V <- A],
+  X=sendInfo(G,VertexList),
+
+
 A.
 
 
@@ -94,3 +97,20 @@ createAcoautorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
   digraph:add_edge(G,B, A,5*(1.0 - rand:uniform())),
   createAcoautorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum).
 
+
+
+sendInfo(_, []) ->ok;
+sendInfo(G, [{V,Pid}|T]) ->
+Neighbours_in =digraph:in_edges(G,V),
+  C= [digraph:edge(G,E) || E <- Neighbours_in],
+Z=[{getPID(G,B),D} || {_,B,_,D} <- C],
+  Neighbours_Out=digraph:out_edges(G,V),
+ F= [digraph:edge(G,E) || E <- Neighbours_Out],
+  Z2=[getPID(G,B2) || {_,_,B2,_} <- F],
+  Pid ! {self(),{V,t,Z,Z2}},
+  sendInfo(G, T).
+
+
+getPID(G,V)->
+  {_,PID}=digraph:vertex(G,V),
+  PID.

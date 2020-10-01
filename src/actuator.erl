@@ -9,9 +9,11 @@ generate_actuator(ExoSelf_PId,Node)->
 
 init(NN_manger_PID) ->
   receive
-    {NN_manger_PID,{Id,AF,Input_PIdPs}} ->
+    {NN_manger_PID,{Id,AF,Input_PIdPs,_}} ->
       loop(Id,NN_manger_PID,AF,{Input_PIdPs,Input_PIdPs},0)
   end.
+
+
 
 loop(Id,NN_manger_PID,AF,{[{Input_PId,Weight}|Input_PIdPs],MInput_PIdPs},Acc)->
   receive
