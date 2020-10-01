@@ -8,10 +8,11 @@
 %%%-------------------------------------------------------------------
 -module('NN_Agent').
 -author("chass").
-
+-compile(export_all).
 %% API
 -export([]).
 -import(digraph,[new/1,add_vertex/2,vertices/1,get_short_path/3,del_vertex/2,add_edge/3]).
+
 createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer)->
   G=new(acyclic),
 createSensors(G,SensorNum),
