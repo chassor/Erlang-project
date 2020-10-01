@@ -1,3 +1,8 @@
 -module(main).
 -export([]).
-not_good()-> hananel.
+not_good()-> lolo(hananel).
+ lolo(M)->
+   if
+     hananel  -> stupid;
+     true ->  smart
+   end.
