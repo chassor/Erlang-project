@@ -1,3 +1,2 @@
 -module(mzzain).
--([]).
-the never end koko.
+the never end hananel the le nob.
