@@ -1,21 +1,9 @@
-%%%-------------------------------------------------------------------
-%%% @author chass
-%%% @copyright (C) 2020, <COMPANY>
-%%% @doc
-%%%
-%%% @end
-%%% Created : 30. Sep 2020 14:52
-%%%-------------------------------------------------------------------
 -module('NN_Agent').
--author("chass").
-
-%% API
 -export([createNN/4]).
 -import(digraph,[new/1,add_vertex/2,vertices/1,get_short_path/3,del_vertex/2,add_edge/3]).
 
 
 createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer)->
-  CC=sensor:g(),
   G=new([acyclic]),
 createSensors(G,SensorNum),
   createNeurons(G,NumOfNeuronsEachLayer*NumOfLayers),
