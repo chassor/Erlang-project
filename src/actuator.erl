@@ -26,16 +26,16 @@ loop(Id,NN_manger_PID,AF,{[{Input_PId,Weight}|Input_PIdPs],MInput_PIdPs},Acc)->
     {NN_manger_PID,terminate}->
       io:format("Neuron:~p has termianted.~n",[self()]),
       ok
-  end;
+  end.
 
 % case of bias in last element in inputs vector.
 loop(Id,ExoSelf_PId,AF,{[Bias],MInput_PIdPs},Output_PIds,Acc)->
   Output = functions:AF(Acc+Bias),
-  do someting with result,
+ % do someting with result,
   loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0);
 
 % case of no bias in inputs vector.
 loop(Id,ExoSelf_PId,AF,{[],MInput_PIdPs},Output_PIds,Acc)->
   Output = functions:AF(Acc),
-  do someting with result,
+%  do someting with result,
   loop(Id,ExoSelf_PId,AF,{MInput_PIdPs,MInput_PIdPs},Output_PIds,0).
