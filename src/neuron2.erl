@@ -1,5 +1,17 @@
+%%%-------------------------------------------------------------------
+%%% @author chass
+%%% @copyright (C) 2020, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 03. Oct 2020 15:55
+%%%-------------------------------------------------------------------
 -module(neuron2).
+-author("chass").
+
 -behaviour(gen_statem).
+
+%% API
 -export([start_link/3, initialize/3, idle/3, in_process/3]).
 
 %% gen_statem callbacks
@@ -21,7 +33,7 @@
 
 start_link(MasterPID,ID,KIND) ->
   {_A,B} =gen_statem:start_link({local, ID}, ?MODULE, {MasterPID,ID,KIND}, []),
-  B.
+B.
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -91,7 +103,8 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
         neuron->       [gen_statem:cast(Pid,{self(),forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
-          PIDmanger ! {self(),result,Result};
+          gen_statem:cast(PIDmanger,{self(),result,Result});
+          %PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,
@@ -99,7 +112,7 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
     false->{next_state,in_process,State#neuron2_state{acc=Acc+ToAdd,inputPIDs2 = Map2}}
   end.
 
-%[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
+  %[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
 in_process(cast,{From,forward,Input},State=#neuron2_state{})->
   In_PIds=State#neuron2_state.inputPIDs2,
   Acc=State#neuron2_state.acc,
@@ -114,7 +127,8 @@ in_process(cast,{From,forward,Input},State=#neuron2_state{})->
         neuron->       [gen_statem:cast(Pid,{self(),forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
-          PIDmanger ! {self(),result,Result};
+          gen_statem:cast(PIDmanger,{self(),result,Result});
+   %       PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,
@@ -158,9 +172,9 @@ code_change(_OldVsn, StateName, State = #neuron2_state{}, _Extra) ->
 
 af(AccToAdd,AF) ->
 
-  case AccToAdd > 0 of
-    true -> AccToAdd;
-    false -> 0
-  end.
+case AccToAdd > 0 of
+true -> AccToAdd;
+false -> 0
+end.
 
-%th:cos(AccToAdd).
+ %th:cos(AccToAdd).

@@ -1,8 +1,18 @@
+%%%-------------------------------------------------------------------
+%%% @author chass
+%%% @copyright (C) 2020, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 04. Oct 2020 18:49
+%%%-------------------------------------------------------------------
 -module(nn_agent).
+-author("chass").
+
 -behaviour(gen_statem).
 -import(digraph,[new/1,add_vertex/2,vertices/1,get_short_path/3,del_vertex/2,add_edge/3]).
 %% API
--export([start_link/6, idle/3, wait_for_result/3]).
+-export([start_link/6, idle/3, wait_for_result/3, generate_id/0]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -63,8 +73,13 @@ state_name(_EventType, _EventContent, State = #nn_agent_state{}) ->
 idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{}) ->
   sendInput(InputList,State#nn_agent_state.sensor_list),
   NextStateName = wait_for_result,
-  {next_state, NextStateName, State}.
+  {next_state, NextStateName, State};
 
+
+
+idle(EventType, EventContent, Data) ->
+  A=handle_common(EventType, EventContent, Data),
+A.
 
 wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
   Act_PIds=State#nn_agent_state.actuator_list2,
@@ -74,15 +89,20 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
   case maps:size(Map2) =:= 0 of
     true ->
 
-      PID_manager=State#nn_agent_state.manger_pid,
+
+          PID_manager=State#nn_agent_state.manger_pid,
       ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
 
       PID_manager !{self(),result,ResultList},
-      %     gen_statem:cast(PIDmanger,{self(),result,Result});
+     %     gen_statem:cast(PIDmanger,{self(),result,Result});
 
       {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
     false->{keep_state,State#nn_agent_state{actuator_list2 = Map2,results = ResultsMap}}
-  end.
+end;
+
+
+wait_for_result(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data).
 
 
 
@@ -95,18 +115,24 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_agent_state{}) -
   NextStateName = the_next_state_name,
   {next_state, NextStateName, State}.
 
+
+
+handle_common({call,From}, {_XFrom,get_graph},State = #nn_agent_state{}) ->
+  {keep_state, State,[{reply,From,State#nn_agent_state.graph}]}.
+
+
 %% @private
 %% @doc This function is called by a gen_statem when it is about to
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
 terminate(_Reason, _StateName, State = #nn_agent_state{}) ->
-  G=State#nn_agent_state.graph,
+ G=State#nn_agent_state.graph,
   A=digraph:vertices(G),
   VertexList= [digraph:vertex(G,V) || V <- A],
-  [gen_statem:stop(Pid)||{_V,{_,Pid}}<-VertexList],
+ [gen_statem:stop(Pid)||{_V,{_,Pid}}<-VertexList],
 
-  ok.
+ok.
 
 %% @private
 %% @doc Convert process state when code is changed
@@ -131,8 +157,8 @@ createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,PID1)->
 %  O= digraph:add_edge(G,neuron10, neuron2,rand:uniform(5)),
   sendInfo(G,VertexList),
 
-  X= {G,SensorsL,ActL},
-  X.
+ X= {G,SensorsL,ActL},
+X.
 
 
 
@@ -152,31 +178,35 @@ sendInput([H|T],[{_ID,PID}|T2])->
 createSensors(_G,0,L)->L;
 createSensors(G,N,L)->
   ID=list_to_atom(lists:flatten(io_lib:format("sensor~p", [N]))),
-  PID=neuron2:start_link(self(),ID,sensor),
+  ID2=list_to_atom(lists:flatten(io_lib:format("sensor~p", [generate_id()]))),
+  PID=neuron2:start_link(self(),ID2,sensor),
   %PID=sensor:generate_sensor(self(),node()),
   % NAME=list_to_atom(lists:flatten(io_lib:format("sensor~p", [N]))),
   L2=[{ID,PID}]++L,
-  digraph:add_vertex(G,ID,{sensor,PID}),
+  digraph:add_vertex(G,ID,{sensor,PID,ID2}),
   createSensors(G,N-1,L2).
 
 
 createNeurons(_G, 0) ->ok;
 createNeurons(G,N) ->
   ID=list_to_atom(lists:flatten(io_lib:format("neuron~p", [N]))),
-  PID=neuron2:start_link(self(),ID,neuron),
+  ID2=list_to_atom(lists:flatten(io_lib:format("neuron~p", [generate_id()]))),
+  PID=neuron2:start_link(self(),ID2,neuron),
   %PID=neuron:generate_neuron(self(),node()),
-  digraph:add_vertex(G,ID,{neuron,PID}),
+  digraph:add_vertex(G,ID,{neuron,PID,ID2}),
   createNeurons(G, N-1).
 
 
 createActuators(_, 0,L) -> L;
 createActuators(G, N,L) ->
   ID=list_to_atom(lists:flatten(io_lib:format("actuator~p", [N]))),
-  PID=neuron2:start_link(self(),ID,actuator),
+  ID2=list_to_atom(lists:flatten(io_lib:format("actuator~p", [generate_id()]))),
+
+  PID=neuron2:start_link(self(),ID2,actuator),
   % PID=actuator:generate_actuator(self(),node()),
 %  NAME=list_to_atom(lists:flatten(io_lib:format("actuator~p", [N]))),
   L2=[{ID,PID}]++L,
-  digraph:add_vertex(G,ID,{actuator,PID}),
+  digraph:add_vertex(G,ID,{actuator,PID,ID2}),
   createActuators(G,N-1,L2).
 
 
@@ -226,7 +256,7 @@ createAcoautorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
 
 
 sendInfo(_, []) ->ok;
-sendInfo(G, [{V,{_,Pid}}|T]) ->
+sendInfo(G, [{V,{_,Pid,ID2}}|T]) ->
   Neighbours_in =digraph:in_edges(G,V),
   C= [digraph:edge(G,E) || E <- Neighbours_in],
   Z=[{getPID(G,B),D} || {_,B,_,D} <- C],
@@ -239,7 +269,7 @@ sendInfo(G, [{V,{_,Pid}}|T]) ->
 
 
 getPID(G,V)->
-  {_,{_,PID}}=digraph:vertex(G,V),
+  {_,{_,PID,ID2}}=digraph:vertex(G,V),
   PID.
 
 
@@ -247,3 +277,7 @@ inverse(L) ->[{Y,X} || {X,Y} <- L].
 
 
 %%%===================================================================
+
+generate_id() ->
+  {MegaSeconds,Seconds,MicroSeconds} = now(),
+  1/(MegaSeconds*1000000 + Seconds + MicroSeconds/1000000).
