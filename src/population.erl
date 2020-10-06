@@ -5,7 +5,7 @@
 -module(population).
 -author("DOR").
 -behaviour(gen_statem).
--export([start_link/8,fitness/2,network_in_computation/3,minn/2,create_new_generation/3]).
+-export([start_link/8,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -23,7 +23,7 @@
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
 start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs) ->
-  {_ok,PID}= gen_statem:start_link({local, ?SERVER}, ?MODULE, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs], []),
+  {_,PID }= gen_statem:start_link(nn_agent, {Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs}, []),
   PID.
 
 %%%===================================================================
@@ -47,8 +47,14 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     finesses_Map = maps:new()},
   Map=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),State),
   Map2= received_graphs(Map,maps:to_list(Map)),
-  insert_inputs(maps:to_list(Map2)),
-  {ok, network_in_computation, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
+  {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
+
+idle(cast,{start_insert},State = #population_state{})->
+  Map=State#population_state.nn_pids_map,
+  Inputs=State#population_state.inputs,
+  insert_inputs(maps:to_list(Map),Inputs),
+  NextStateName = network_in_computation,
+  {next_state, NextStateName, State}.
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
@@ -75,7 +81,7 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 
-network_in_computation(cast,{KEY,nn_result,NN_Result},State)->
+network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{})->
 Fitness = fitness(NN_Result,0),
 UpdateFitnessMap = maps:put(KEY,Fitness,State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -83,14 +89,15 @@ UpdateFitnessMap = maps:put(KEY,Fitness,State#population_state.finesses_Map),
   if
     Size =:= 0 ->
       MAP=State#population_state.nn_pids_map,
-      {WorstNN , BestNN} = split_nn(State#population_state.num_of_nn,State#population_state.finesses_Map),
+      {WorstNN , BestNN} = split_nn(State#population_state.num_of_nn,UpdateFitnessMap),
       Map2=terminate_worst_nn(WorstNN,MAP),
-      Map3 = create_NN_Agents_M(Map2,BestNN),
+      Map3 = create_NN_Agents_M(Map2,BestNN,State),
+      %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,create_new_generation,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map2}};
       true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
   end.
 
-create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State)->
+create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
   Tuple = setelement(2,maps:get(KEY),Mutation_G),
   Map2 = maps:put(KEY,Tuple,State#population_state.nn_pids_map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -142,18 +149,19 @@ fitness(T,Sum2).
 create_NN_Agents(0,Map,_)->Map;
 create_NN_Agents(N,Map,S)->
   Key = generate_id(),
-  %PID = gen_statem:start_link(nn_Agent,[S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.af,Key],[]),
-  PID=100,
+  {_,PID} = gen_statem:start_link(nn_agent,{S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),Key,new},[]),
   Map2 = maps:put(Key,{PID,undefined},Map),
   create_NN_Agents(N-1,Map2,S).
 
-create_NN_Agents_M(M,[])->M;
-create_NN_Agents_M(M,[H|T])->
-  Key = generate_id(),
-  G = element(2,element(2,H)),
-  PID = gen_statem:start_link(nn_Agent,[G,Key],[]),
-  Map2 = maps:put(Key,{PID,undefined},M),
-  create_NN_Agents_M(Map2,T).
+create_NN_Agents_M(M,[],_)->M;
+create_NN_Agents_M(M,[H|T],S)->
+  NewKey = generate_id(),
+  Key=element(1,H),
+  G = element(2,maps:get(Key,M)),
+  {_,PID} = gen_statem:start_link(nn_agent,{S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),NewKey,G},[]),
+  %PID = rand:uniform(),
+  Map2 = maps:put(NewKey,{PID,undefined},M),
+  create_NN_Agents_M(Map2,T,S).
 
 
 
@@ -163,7 +171,7 @@ terminate_worst_nn([],Map)->Map;
 
 terminate_worst_nn([H|T],Map)->
   {KEY,_}=H,
-  PID=maps:get(KEY,Map),
+  PID=element(1,maps:get(KEY,Map)),
   gen_statem:stop(PID),
   Map2=maps:remove(KEY,Map),
   terminate_worst_nn(T,Map2).
@@ -173,7 +181,8 @@ terminate_worst_nn([H|T],Map)->
 split_nn(N,FitnessMAp)->
     Fun=fun(A,B)->minn(A,B)end,
     Sort_List = lists:sort(Fun,maps:to_list(FitnessMAp)),
-    {WorstNN , BestNN} = lists:sublist(N/2,Sort_List),
+     X=round(length(Sort_List)/2),
+    {WorstNN , BestNN} = lists:split(X,Sort_List),
     {WorstNN , BestNN}.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
@@ -188,8 +197,8 @@ received_graphs(Map,[])->Map;
 received_graphs(Map,[H|T])->
   Key = element(1,H),
   PID = element(1,element(2,H)),
-  % G = gen_statem:call(PID,{self(),get_graph}),
-  G=digraph:new(),
+  G = gen_statem:call(PID,{self(),get_graph}),
+  %G=digraph:new(),
   Tuple = setelement(2,element(2,H),G),
   Map2 = maps:put(Key,Tuple,Map),
   received_graphs(Map2,T).
@@ -199,10 +208,9 @@ generate_id() ->
   1/(MegaSeconds*1000000 + Seconds + MicroSeconds/1000000).
 %The generate_id/0 creates a unique Id using current time, the Id is a floating point value. The generate_ids/2 function creates a list of unique Ids.
 
-insert_inputs([])->ok;
-insert_inputs([_KEY,{PID,_G}|T]) ->
-  %gen_statem:cast(PID,{insert_input}),
-  Dor=PID,
-  insert_inputs(T).
+insert_inputs([],_)->ok;
+insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
+  gen_statem:cast(PID,{self(),insert_input,Inputs}),
+  insert_inputs(T,Inputs).
 
 
