@@ -77,7 +77,7 @@ initialize({call,From}, {NN_manger_PID,{Id,AF,Input_PIdPs,Output_PIds}}, State =
 %% idle when its sensor
 idle(cast,{insert_input,NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
   Out_PIds=State#neuron2_state.outputPIds,
-  [gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
+  [gen_statem:cast(Pid,{State#neuron2_state.id,forward,W}) || Pid <- Out_PIds],
   {keep_state, State#neuron2_state{acc=W}};
 
 %%idle(cast,{From,forward,Input},State=#neuron2_state{kind=neuron})->
@@ -100,17 +100,21 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
-        neuron->       [gen_statem:cast(Pid,{self(),forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
+        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
-          gen_statem:cast(PIDmanger,{self(),result,Result});
+          gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
           %PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,
       {keep_state, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs }};
     false->{next_state,in_process,State#neuron2_state{acc=Acc+ToAdd,inputPIDs2 = Map2}}
-  end.
+  end;
+
+
+idle(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data).
 
   %[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
 in_process(cast,{From,forward,Input},State=#neuron2_state{})->
@@ -124,24 +128,20 @@ in_process(cast,{From,forward,Input},State=#neuron2_state{})->
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
-        neuron->       [gen_statem:cast(Pid,{self(),forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
+        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
-          gen_statem:cast(PIDmanger,{self(),result,Result});
+          gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
    %       PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,
       {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs }};
     false->{keep_state,State#neuron2_state{acc=Acc+ToAdd,inputPIDs2 = Map2}}
-  end.
+  end;
 
-
-
-
-
-
-
+in_process(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data).
 
 
 %% @private
@@ -178,3 +178,6 @@ false -> 0
 end.
 
  %th:cos(AccToAdd).
+
+handle_common({call,From}, {_XFrom,reset},State = #neuron2_state{}) ->
+  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]}.
