@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(neuron2_state, {id,kind,manger_pid,af,inputPIDs,inputPIDs2,outputPIds,acc}).
+-record(neuron2_state, {id,kind,manger_pid,af,inputPIDs,inputPIDs2,outputPIds,bias,acc}).
 
 %%%===================================================================
 %%% API
@@ -70,9 +70,9 @@ state_name(_EventType, _EventContent, State = #neuron2_state{}) ->
   {next_state, NextStateName, State}.
 
 
-initialize({call,From}, {NN_manger_PID,{Id,AF,Input_PIdPs,Output_PIds}}, State = #neuron2_state{}) ->
+initialize({call,From}, {NN_manger_PID,{Id,AF,Input_PIdPs,Output_PIds,Bias}}, State = #neuron2_state{}) ->
   NextStateName = idle,
-  {next_state, NextStateName, State#neuron2_state{manger_pid = NN_manger_PID,outputPIds = Output_PIds, id=Id,af=AF,acc=0,inputPIDs2 =maps:from_list(Input_PIdPs) ,inputPIDs =maps:from_list(Input_PIdPs)},[{reply,From,ok}]}.
+  {next_state, NextStateName, State#neuron2_state{manger_pid = NN_manger_PID,outputPIds = Output_PIds, id=Id,af=AF,acc=0,inputPIDs2 =maps:from_list(Input_PIdPs) ,inputPIDs =maps:from_list(Input_PIdPs),bias = Bias},[{reply,From,ok}]}.
 
 %% idle when its sensor
 idle(cast,{insert_input,NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
@@ -96,7 +96,8 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
   Map2=maps:remove(From,In_PIds),
   case maps:size(Map2) =:= 0 of
     true ->
-      Result= af(Acc+ToAdd,State#neuron2_state.af),
+      Bias=State#neuron2_state.bias,
+      Result= af(Acc+ToAdd+Bias,State#neuron2_state.af),
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
@@ -124,7 +125,8 @@ in_process(cast,{From,forward,Input},State=#neuron2_state{})->
   Map2=maps:remove(From,In_PIds),
   case maps:size(Map2) =:= 0 of
     true ->
-      Result= af(Acc+ToAdd,State#neuron2_state.af),
+      Bias=State#neuron2_state.bias,
+      Result= af(Acc+ToAdd+Bias,State#neuron2_state.af),
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
@@ -172,12 +174,46 @@ code_change(_OldVsn, StateName, State = #neuron2_state{}, _Extra) ->
 
 af(AccToAdd,AF) ->
 
-case AccToAdd > 0 of
-true -> AccToAdd;
-false -> 0
+case AF of
+ relu-> case AccToAdd > 0 of
+    true -> AccToAdd;
+    false -> 0
+          end;
+  sin->math:sin(AccToAdd);
+  cos->math:cos(AccToAdd);
+ tanh->math:tanh(AccToAdd);
+ bin->case AccToAdd > 0 of
+        true->1;
+        false->0
+      end
+
 end.
+
+
 
  %th:cos(AccToAdd).
 
 handle_common({call,From}, {_XFrom,reset},State = #neuron2_state{}) ->
-  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]}.
+  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]};
+
+
+handle_common({call,From}, {_XFrom,new_neighbour_out,ID},State = #neuron2_state{}) ->
+  L=State#neuron2_state.outputPIds,
+ L2= L++[ID],
+  {next_state,idle, State#neuron2_state{outputPIds = L2},[{reply,From,neighbour_out_added}]};
+
+handle_common({call,From}, {_XFrom,new_neighbour_in,{ID,Weight}},State = #neuron2_state{}) ->
+  Map=State#neuron2_state.inputPIDs,
+  Map2=maps:put(ID,Weight,Map),
+  {next_state,idle, State#neuron2_state{inputPIDs = Map2,inputPIDs2 = Map2},[{reply,From,neighbour_in_added}]};
+
+handle_common({call,From}, {_XFrom,newBias,NewBias},State = #neuron2_state{}) ->
+  {next_state,idle, State#neuron2_state{bias = NewBias},[{reply,From,bias_changed}]};
+
+handle_common({call,From}, {_XFrom,newWeight,{ID,Weight}},State = #neuron2_state{}) ->
+  Map=State#neuron2_state.inputPIDs,
+  Map2=maps:put(ID,Weight,Map),
+  {next_state,idle, State#neuron2_state{inputPIDs = Map2,inputPIDs2 = Map2},[{reply,From,weight_added}]};
+
+handle_common({call,From}, {_XFrom,newAF,NewAF},State = #neuron2_state{}) ->
+  {next_state,idle, State#neuron2_state{af = NewAF},[{reply,From,af_changed}]}.
