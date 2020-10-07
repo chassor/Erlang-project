@@ -5,7 +5,7 @@
 -module(population).
 -author("DOR").
 -behaviour(gen_statem).
--export([start_link/8,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3]).
+-export([start_link/9,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -13,7 +13,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(population_state, {num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs}).
+-record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs}).
 
 %%%===================================================================
 %%% API
@@ -22,8 +22,8 @@
 %% @doc Creates a gen_statem process which calls Module:init/1 to
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
-start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs) ->
-  {_,PID }= gen_statem:start_link(nn_agent, {Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs}, []),
+start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID) ->
+  {_,PID }= gen_statem:start_link({local,ID}, ?MODULE, {Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID},[]),
   PID.
 
 %%%===================================================================
@@ -34,8 +34,9 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs}) ->
+init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
   State=#population_state{
+    id = ID ,
     inputs = Inputs,
     main_PID = Main_PID,
     num_of_nn = Num_Of_NN_AGENTS,
@@ -75,6 +76,7 @@ format_status(_Opt, [_PDict, _StateName, _State]) ->
 %% state name.  If callback_mode is state_functions, one of these
 %% functions is called when gen_statem receives and event from
 %% call/2, cast/2, or as a normal process message.
+
 state_name(_EventType, _EventContent, State = #population_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
@@ -89,21 +91,27 @@ UpdateFitnessMap = maps:put(KEY,Fitness,State#population_state.finesses_Map),
   if
     Size =:= 0 ->
       MAP=State#population_state.nn_pids_map,
-      {WorstNN , BestNN} = split_nn(State#population_state.num_of_nn,UpdateFitnessMap),
+      {BestNN , WorstNN} = split_nn(State#population_state.num_of_nn,UpdateFitnessMap),
       Map2=terminate_worst_nn(WorstNN,MAP),
       Map3 = create_NN_Agents_M(Map2,BestNN,State),
+      Keys_good_map=maps:without(maps:keys(Map2),Map3),
+      FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
-      {next_state,create_new_generation,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map2}};
+      {next_state,create_new_generation,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Keys_good_map , finesses_Map = FitnessMap}};
+
       true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
   end.
 
 create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
-  Tuple = setelement(2,maps:get(KEY),Mutation_G),
+  Tuple={element(1,maps:get(KEY,State#population_state.nn_pids_map)),Mutation_G},
   Map2 = maps:put(KEY,Tuple,State#population_state.nn_pids_map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
   Size = maps:size(Counter),
   if
-    Size =:= 0 -> {next_state,network_in_computation,State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}  ;
+    Size =:= 0 ->
+      MangerPid=State#population_state.main_PID,
+      MangerPid ! {self(),new_gen_hit_me},
+      {next_state,idle,State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2  }}  ;
     true -> {keep_state,State#population_state{nn_pids_map2 = Counter , nn_pids_map = Map2 }}
   end.
 
@@ -148,17 +156,18 @@ fitness(T,Sum2).
 
 create_NN_Agents(0,Map,_)->Map;
 create_NN_Agents(N,Map,S)->
-  Key = generate_id(),
-  {_,PID} = gen_statem:start_link(nn_agent,{S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),Key,new},[]),
+  Key = genarateIdfromAtom(),
+  PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,
+    S#population_state.numOfNeuronsEachLayer,self(),Key,new),
   Map2 = maps:put(Key,{PID,undefined},Map),
   create_NN_Agents(N-1,Map2,S).
 
 create_NN_Agents_M(M,[],_)->M;
 create_NN_Agents_M(M,[H|T],S)->
-  NewKey = generate_id(),
+  NewKey = genarateIdfromAtom(),
   Key=element(1,H),
   G = element(2,maps:get(Key,M)),
-  {_,PID} = gen_statem:start_link(nn_agent,{S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),NewKey,G},[]),
+  PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),NewKey,G),
   %PID = rand:uniform(),
   Map2 = maps:put(NewKey,{PID,undefined},M),
   create_NN_Agents_M(Map2,T,S).
@@ -182,8 +191,8 @@ split_nn(N,FitnessMAp)->
     Fun=fun(A,B)->minn(A,B)end,
     Sort_List = lists:sort(Fun,maps:to_list(FitnessMAp)),
      X=round(length(Sort_List)/2),
-    {WorstNN , BestNN} = lists:split(X,Sort_List),
-    {WorstNN , BestNN}.
+    {BestNN , WorstNN} = lists:split(X,Sort_List),
+     {BestNN , WorstNN}.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
       Val1=element(2,A),
@@ -214,3 +223,10 @@ insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
   insert_inputs(T,Inputs).
 
 
+genarateIdfromAtom()->list_to_atom(lists:flatten(io_lib:format("nn~p", [generate_id()]))).
+
+%[{Key,Fintess},{}..]
+update_fitness_map(M,[])->M;
+update_fitness_map(M,[{Key,_}|T]) ->
+  M2 = maps:remove(Key,M),
+  update_fitness_map(M2,T).

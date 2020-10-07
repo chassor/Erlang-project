@@ -4,10 +4,11 @@
 -export([start/1, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,frame, master, panel}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,frame, master, panel,log}).
 
 start(Node) ->
-  wx_object:start_link({local,?SERVER},?MODULE,[global,Node],[]).
+  wx_object:start_link({local,?SERVER},?MODULE,[global,Node],[]),
+  ok.
 
 init([_Mode,_Node]) ->
   wx:new(),
@@ -28,6 +29,8 @@ init([_Mode,_Node]) ->
     [{label, "choose number of sensors"}]),
   ActuatorsPickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "choose number of actuators"}]),
+  NetworksPickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
+    [{label, "choose number of networks for each node"}]),
   ButtonPickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, " start Neuroevolution calculation"}]),
 
@@ -40,6 +43,8 @@ init([_Mode,_Node]) ->
   wxSpinCtrl:setRange(SensorsPicker, 1, 1000000000),
   ActuatorsPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(ActuatorsPicker, 1, 1000000000),
+  NetworksPicker = wxSpinCtrl:new(Panel, []),
+  wxSpinCtrl:setRange(NetworksPicker, 1, 1000000000),
   ButtonPicker = wxButton:new(Panel, 10, [{label, "start"}]),
 
 
@@ -52,6 +57,7 @@ init([_Mode,_Node]) ->
   wxSizer:add(NeuronsPickerSizer, NeuronsPicker, PickerOptions),
   wxSizer:add(SensorsPickerSizer, SensorsPicker, PickerOptions),
   wxSizer:add(ActuatorsPickerSizer, ActuatorsPicker, PickerOptions),
+  wxSizer:add(NetworksPickerSizer, NetworksPicker, PickerOptions),
   wxSizer:add(ButtonPickerSizer, ButtonPicker, PickerOptions),
 
 
@@ -64,23 +70,26 @@ init([_Mode,_Node]) ->
   wxSizer:add(MainSizer, NeuronsPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, SensorsPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, ActuatorsPickerSizer, SizerOptions),
+  wxSizer:add(MainSizer, NetworksPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, ButtonPickerSizer, SizerOptions),
 
   wxPanel:setSizer(Panel, MainSizer),
   %{ok,M}=master:start_link(),
   wxFrame:show(AF_Frame),
 
-  #state{
-    clicked=0,
-    activation_function=Choice,
+     State = #state{
+      clicked=0,
+     activation_function=Choice,
     neurons=NeuronsPicker,
     layers=LayersPicker,
     sensors=SensorsPicker,
     actuators=ActuatorsPicker,
     frame=AF_Frame,
     %master=M,
-    panel=Panel
-  }.
+    panel=Panel},
+     State.
+
+
 
 %%handle 'start' event
 handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
@@ -105,7 +114,10 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
         Tanh =wxListBox:isSelected(Choice,1), %check if the user chose Tanh as the algorithm
         Binary_step =wxListBox:isSelected(Choice,2), %check if the user chose Binary_step as the algorithm
         Sigmoid =wxListBox:isSelected(Choice,3), %check if the user chose Sigmoid as the algorithm
+        io:format("Starting neuro evolotaion",[]),
         Click=1;
+        % AF=coosen_AF(ReLU,Tanh,Binary_step,Sigmoid),
+        %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
 
 
     true -> todo
@@ -136,7 +148,7 @@ handle_call(_Request, _From, State) ->
   {reply,Reply,State}.
 
 handle_cast({done,Outputs}, %handle completion call from the master
-    State = #state{algchooser = Choice ,frame = Frame,log = Log}) ->
+    State = #state{activation_function = Choice ,frame = Frame,log = Log}) ->
   wxTextCtrl:changeValue(Log, ".  "), %clean the log
   SP=wxListBox:isSelected(Choice,0), %chose what output to print
   MST=wxListBox:isSelected(Choice,1),
@@ -162,3 +174,4 @@ code_change(_, _, State) ->
 terminate(_Reason, _) ->
   ok.
 
+run_nn()->todo.
