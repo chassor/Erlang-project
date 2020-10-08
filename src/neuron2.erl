@@ -177,7 +177,7 @@ af(AccToAdd,AF) ->
 case AF of
  relu-> case AccToAdd > 0 of
     true -> AccToAdd;
-    false -> 0
+    false -> 0.01*AccToAdd
           end;
   sin->math:sin(AccToAdd);
   cos->math:cos(AccToAdd);
