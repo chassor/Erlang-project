@@ -66,7 +66,7 @@ addEdge(G,Weight,Counter) ->
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
   {V1,{A1,B2,C3,D4,E5,_}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
-  EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or (A =:=sensor andalso A1 =:= sensor)
+  EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or ( A1 =:= sensor)
   or (A =:=actuator),
 
   if
@@ -92,7 +92,7 @@ addNeuron(G,Weight1,Weight2,Counter) ->
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
   {V1,{A1,B2,C3,D4,E5,E6}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
-  EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or (A =:=sensor andalso A1 =:= sensor)
+  EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or (A1 =:= sensor)
     or (A =:=actuator ) ,
 
   if
