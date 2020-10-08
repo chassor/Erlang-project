@@ -95,9 +95,11 @@ UpdateFitnessMap = maps:put(KEY,Fitness,State#population_state.finesses_Map),
       Map2=terminate_worst_nn(WorstNN,MAP),
       Map3 = create_NN_Agents_M(Map2,BestNN,State),
       Keys_good_map=maps:without(maps:keys(Map2),Map3),
+      MangerPid=State#population_state.main_PID,
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
+      MangerPid ! {self(),new_gen_hit_me,BestNN},
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
-      {next_state,create_new_generation,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Keys_good_map , finesses_Map = FitnessMap}};
+      {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
       true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
   end.
@@ -149,7 +151,7 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
   %%fitness(List,Sum).
 
 fitness([],Sum)->
-  math:sqrt(Sum);
+  abs(3-math:sqrt(Sum));
 fitness([H|T],Sum)->
   Sum2=Sum+(H*H),
 fitness(T,Sum2).
@@ -169,7 +171,9 @@ create_NN_Agents_M(M,[H|T],S)->
   G = element(2,maps:get(Key,M)),
   PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,S#population_state.numOfNeuronsEachLayer,self(),NewKey,G),
   %PID = rand:uniform(),
-  Map2 = maps:put(NewKey,{PID,undefined},M),
+  NewG = gen_statem:call(PID,{self(),get_graph}),
+   gen_statem:call(PID,{self(),mutate}),
+  Map2 = maps:put(NewKey,{PID,NewG},M),
   create_NN_Agents_M(Map2,T,S).
 
 
