@@ -85,19 +85,19 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{})->
 Fitness = fitness(NN_Result,0),
-UpdateFitnessMap = maps:put(KEY,Fitness,State#population_state.finesses_Map),
+UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
   Size = maps:size(Counter),
   if
     Size =:= 0 ->
       MAP=State#population_state.nn_pids_map,
-      {BestNN , WorstNN} = split_nn(State#population_state.num_of_nn,UpdateFitnessMap),
+      {BestNN , WorstNN,Result_for_master} = split_nn(UpdateFitnessMap),
       Map2=terminate_worst_nn(WorstNN,MAP),
       Map3 = create_NN_Agents_M(Map2,BestNN,State),
-      Keys_good_map=maps:without(maps:keys(Map2),Map3),
+      %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
-      MangerPid ! {self(),new_gen_hit_me,BestNN},
+      MangerPid ! {self(),new_gen_hit_me,Result_for_master},
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
@@ -191,16 +191,17 @@ terminate_worst_nn([H|T],Map)->
 
 
 
-split_nn(N,FitnessMAp)->
+split_nn(FitnessMAp)->
     Fun=fun(A,B)->minn(A,B)end,
     Sort_List = lists:sort(Fun,maps:to_list(FitnessMAp)),
      X=round(length(Sort_List)/2),
+     {_Key,T}=lists:nth(1,Sort_List),
     {BestNN , WorstNN} = lists:split(X,Sort_List),
-     {BestNN , WorstNN}.
+     {BestNN , WorstNN,T}.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
-      Val1=element(2,A),
-      Val2=element(2,B),
+      {_Key1,{Val1,_Result1}} = A,
+      {_Key2,{Val2,_Result2}} = B,
       if
         Val1<Val2 -> true ;
         true -> false
@@ -234,3 +235,6 @@ update_fitness_map(M,[])->M;
 update_fitness_map(M,[{Key,_}|T]) ->
   M2 = maps:remove(Key,M),
   update_fitness_map(M2,T).
+
+
+
