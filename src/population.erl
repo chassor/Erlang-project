@@ -91,7 +91,11 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
   if
     Size =:= 0 ->
       MAP=State#population_state.nn_pids_map,
-      {BestNN , WorstNN,Result_for_master} = split_nn(UpdateFitnessMap),
+      R = split_nn(UpdateFitnessMap),
+      BestNN  = element(1,R),
+      WorstNN = element(2,R),
+      {_Pid,G} = maps:get(element(3,R),MAP),
+      Result_for_master = {element(4,R),element(5,R),G},
       Map2=terminate_worst_nn(WorstNN,MAP),
       Map3 = create_NN_Agents_M(Map2,BestNN,State),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
@@ -195,9 +199,10 @@ split_nn(FitnessMAp)->
     Fun=fun(A,B)->minn(A,B)end,
     Sort_List = lists:sort(Fun,maps:to_list(FitnessMAp)),
      X=round(length(Sort_List)/2),
-     {_Key,T}=lists:nth(1,Sort_List),
+     L=lists:nth(1,Sort_List),
     {BestNN , WorstNN} = lists:split(X,Sort_List),
-     {BestNN , WorstNN,T}.
+      Return = {BestNN,WorstNN,element(1,L),element(1,element(2,L)),element(2,element(2,L))},
+      Return.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
       {_Key1,{Val1,_Result1}} = A,
