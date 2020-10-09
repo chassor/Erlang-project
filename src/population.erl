@@ -138,8 +138,10 @@ handle_event(_EventType, _EventContent, _StateName, State = #population_state{})
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, _StateName, _State = #population_state{}) ->
-  ok.
+terminate(_Reason, _StateName, _State = #population_state{nn_pids_map = Map }) ->
+  L = maps:to_list(Map),
+  [ gen_statem:stop(PID)  || {_KEY,{PID,_G}} <- L],
+   ok.
 
 %% @private
 %% @doc Convert process state when code is changed
@@ -189,6 +191,8 @@ terminate_worst_nn([],Map)->Map;
 terminate_worst_nn([H|T],Map)->
   {KEY,_}=H,
   PID=element(1,maps:get(KEY,Map)),
+ % G = element(2,maps:get(KEY,Map)),
+ % digraph:delete(G),
   gen_statem:stop(PID),
   Map2=maps:remove(KEY,Map),
   terminate_worst_nn(T,Map2).
