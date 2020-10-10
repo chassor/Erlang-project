@@ -10,8 +10,8 @@
 -author("chass").
 
 %% API
--export([generateGraph/1]).
-
+-export([generateGraph/1, createFrame/0, replaceImage/1]).
+-include_lib("wx/include/wx.hrl").
 
 generateGraph(G)->
   L1=getEdgesList(G),
@@ -57,7 +57,7 @@ to_dot(Graph, File) ->
   io:format(IODevice, "dpi= 100 ;ratio=\"fill\";size=\"14.7,7.3!\";margin=0;", []),
   % print nodes
   lists:foreach(
-    fun({Label,Name,Bias,AF}) ->
+    fun({Label,Name,Bias,AF,_K}) ->
 
 
       if
@@ -95,6 +95,14 @@ to_dot(Graph, File) ->
     Edges
   ),
 
+  io:format(IODevice, "{ rank=min", []),
+  [ io:format(IODevice, ";~s", [B])||{_A,B,_C,_D,sensor}<-Nodes],
+  io:format(IODevice, "}~n", []),
+  io:format(IODevice, "{ rank=max", []),
+  [ io:format(IODevice, ";~s", [B])||{_A,B,_C,_D,actuator}<-Nodes],
+  io:format(IODevice, "}~n", []),
+
+
   % close file
   io:format(IODevice, "}~n", []),
   file:close(IODevice).
@@ -113,9 +121,9 @@ createNodesList(Map,[H|T],L) ->
   {A2,{B,_C,_D,E,F,G}}=H ,
   A=maps:get(A2,Map),
   case B of
-    neuron-> createNodesList(Map,T,L ++[{neuron,A,F,G}]);
-    sensor->createNodesList(Map,T,L ++[{E,A,no,no}]);
-    actuator->createNodesList(Map,T,L ++[{E,A,F,G}])
+    neuron-> createNodesList(Map,T,L ++[{neuron,A,F,G,B}]);
+    sensor->createNodesList(Map,T,L ++[{E,A,no,no,B}]);
+    actuator->createNodesList(Map,T,L ++[{E,A,F,G,B}])
   end
 .
 
@@ -124,8 +132,44 @@ createNodesList(Map,[H|T],L) ->
 
 
 creatMapOfNewNames([], Map,N) ->Map;
-creatMapOfNewNames([{B,{_A,_B,_C,_,_,_}}|T], Map,N) ->
-  NewName=list_to_atom(lists:flatten(io_lib:format("x~p", [N]))),
+creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
+  if
+    A=:=neuron->NewName=list_to_atom(lists:flatten(io_lib:format("x~p", [N])));
+    true->NewName=V
+  end,
+
   NewMap=maps:put(B,NewName,Map),
-  creatMapOfNewNames(T, NewMap,N+1)
-.
+  creatMapOfNewNames(T, NewMap,N+1).
+
+
+
+createFrame()->
+  W = wx:new(),
+  Frame = wxFrame:new(W, -1, "result",[{size, {1420, 740}}]),
+  Panel = wxPanel:new(Frame,[{size, {1400, 700}}]),
+  Label = wxStaticText:new(Frame, ?wxID_ANY, "neuron network"),
+  MainSizer = wxBoxSizer:new(?wxVERTICAL),
+  wxSizer:add(MainSizer, Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
+  Vbox = wxBoxSizer:new(?wxVERTICAL),
+  wxSizer:add(Vbox, Panel, [{flag, ?wxEXPAND}]),
+  {Width, Height} = wxPanel:getSize(Panel),
+
+  %PictureDrawScaled = wxImage:scale(PictureDraw, 1280, 720,[{quality,?wxIMAGE_QUALITY_HIGH}]),
+  wxFrame:show(Frame),
+  {Frame,Panel}.
+
+
+
+replaceImage(Panel) ->
+PictureDraw1 = wxImage:new("test1.png"),
+PictureDraw=wxImage:rescale(PictureDraw1,1400,700,[{quality,?wxIMAGE_QUALITY_HIGH}]),
+Image1 = wxBitmap:new(PictureDraw),
+Image = wxStaticBitmap:new(Panel,12,Image1),
+F = fun(I, _) -> redraw(Image1,I) end,
+wxPanel:connect(Panel, paint, [{callback,F}]),
+% wxWindow:refresh(Panel,[{eraseBackground,false}]),
+  Panel.
+
+redraw(Image, #wx{obj=Panel}) ->
+  DC = wxBufferedPaintDC:new(Panel),
+  wxDC:drawBitmap(DC,Image,{0,0}).
