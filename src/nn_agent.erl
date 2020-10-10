@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,results}).
+-record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,input_list,results}).
 
 %%%===================================================================
 %%% API
@@ -42,7 +42,7 @@ start_link(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,ManagerPid,Id
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,ManagerPid,Id,G2}) ->
-
+  process_flag(trap_exit, true),
   if
     G2 =:=new ->{G,SensorList,ActList}=createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,Id) ;
     true -> {G,SensorList,ActList}=createNN(G2,Id)
@@ -78,12 +78,14 @@ state_name(_EventType, _EventContent, State = #nn_agent_state{}) ->
 idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{}) ->
   sendInput(InputList,State#nn_agent_state.sensor_list),
   NextStateName = wait_for_result,
-  {next_state, NextStateName, State};
+  {next_state, NextStateName, State#nn_agent_state{input_list = InputList}};
+
+
 
 
 
 idle(EventType, EventContent, Data) ->
-  A=handle_common(EventType, EventContent, Data),
+  A=handle_common(EventType, EventContent, Data,idle),
 A.
 
 wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
@@ -93,6 +95,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
  % ResultsMap=maps:put(maps:get(From,Act_PIds),Result,ResultsMap2),
   ResultsMap=maps:put(ID,Result,ResultsMap2),
   Map2=maps:remove(From,Act_PIds),
+ % A=all_messages([]),
   case maps:size(Map2) =:= 0 of
     true ->
 
@@ -100,7 +103,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
           PID_manager=State#nn_agent_state.manger_pid,
       ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
       PID_manager !{self(),result,ResultList},
-     %gen_statem:cast(PIDmanger,{self(),result,Result});
+     %gen_statem:cast(PIDmanger,{self(),result,ResultList});
 
       {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
     false->{keep_state,State#nn_agent_state{actuator_list2 = Map2,results = ResultsMap}}
@@ -108,7 +111,7 @@ end;
 
 
 wait_for_result(EventType, EventContent, Data) ->
-  handle_common(EventType, EventContent, Data).
+  handle_common(EventType, EventContent, Data,wait_for_result).
 
 
 
@@ -121,21 +124,64 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_agent_state{}) -
   NextStateName = the_next_state_name,
   {next_state, NextStateName, State}.
 
+all_messages(Messages) ->
+  receive
+    AnyMessage ->
+      all_messages( [AnyMessage|Messages])
+  after 0 ->
+    lists:reverse(Messages)
+  end.
 
-
-handle_common({call,From}, {_XFrom,get_graph},State = #nn_agent_state{}) ->
+handle_common({call,From}, {_XFrom,get_graph},State = #nn_agent_state{},_State) ->
   {keep_state, State,[{reply,From,State#nn_agent_state.graph}]};
 
-handle_common({call,From}, {_XFrom,reset},State = #nn_agent_state{}) ->
-  VertexList= getVerticesList(State),
-  [gen_statem:call(Pid,{State#nn_agent_state.id,reset})||{_V,{_,_,Pid}}<-VertexList],
+
+
+handle_common({call,From}, {_XFrom,reset},State = #nn_agent_state{},_State) ->
+  VertexList= getVerticesList(State#nn_agent_state.graph),
+  [gen_statem:cast(Pid,{State#nn_agent_state.id,reset})||{_V,{_,_,Pid,_,_,_}}<-VertexList],
   {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}
     , State#nn_agent_state{},[{reply,From,ok}]};
 
 
-handle_common({call,From}, {_XFrom,mutate},State = #nn_agent_state{}) ->
+handle_common({call,From}, {_XFrom,mutate},State = #nn_agent_state{},_State) ->
   mutate_generator:mutateAgent(State#nn_agent_state.graph),
-  {keep_state, State,[{reply,From,State#nn_agent_state.graph}]}.
+  {keep_state, State,[{reply,From,State#nn_agent_state.graph}]};
+
+
+
+
+
+
+handle_common(info, {'EXIT',PID,_},State = #nn_agent_state{},CuRR_State) ->
+  NN_id=State#nn_agent_state.id,
+  G=State#nn_agent_state.graph,
+  VertexList= getVerticesList(State),
+  timer:sleep(50),
+  resetProcess(VertexList,NN_id),
+  resetProcess(VertexList,NN_id),
+
+  {V,Kind,_OldPid,PID1,E,Bias,AF}= getinfoByID(PID,VertexList),
+  NewPID=neuron2:start_link(self(),PID1,Kind),
+ E22= digraph:add_vertex(G,V,{Kind,NewPID,PID1,E,Bias,AF}),
+  sendInfo(G,NN_id,[{V,{Kind,NewPID,PID1,E,Bias,AF}}]),
+  VertexList2= getVerticesList(State),
+  if
+      CuRR_State=:=wait_for_result->
+        A=deleteResults([]),
+        sendInput(State#nn_agent_state.input_list,State#nn_agent_state.sensor_list),
+      {keep_state, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
+    true->{keep_state, State}
+  end ;
+
+
+
+handle_common(info,_,State = #nn_agent_state{},_State) ->
+  {keep_state, State};
+
+handle_common(_,_,State = #nn_agent_state{},_State) ->
+  {keep_state, State}.
+
 
 
 %% @private
@@ -146,8 +192,10 @@ handle_common({call,From}, {_XFrom,mutate},State = #nn_agent_state{}) ->
 terminate(_Reason, _StateName, State = #nn_agent_state{}) ->
 
   VertexList= getVerticesList(State),
-L= [gen_statem:stop(Pid)||{_V,{_,_,Pid,_,_,_}}<-VertexList],
-
+  stopProcess(VertexList),
+%%L= [{is_process_alive(Pid1),Pid}||{_V,{_,Pid1,Pid,_,_,_}}<-VertexList],
+%% L2= [gen_statem:stop(Pid)||{true,Pid}<-L],
+ X= all_messages([]),
 ok.
 
 %% @private
@@ -362,3 +410,47 @@ randomWeight()->
     2-> Y=-1*X
     end,
   Y.
+
+
+
+
+getinfoByID(_PID, []) ->ok;
+getinfoByID(PID, [{V,{Kind,OldPid,PID1,E,Bias,AF}}|T]) ->
+  if
+   PID =:= OldPid  -> {V,Kind,OldPid,PID1,E,Bias,AF};
+    true -> getinfoByID(PID, T)
+  end
+.
+
+resetProcess([],_)->ok;
+resetProcess([{_V,{_,Pid1,Pid,_,_,_}}|T],NN_id)->
+  X=is_process_alive(Pid1),
+  if
+    X=:=true->   gen_statem:call(Pid,{NN_id,reset}),
+      resetProcess(T,NN_id);
+    true->
+      resetProcess(T,NN_id)
+  end.
+
+stopProcess([])->ok;
+stopProcess([{_V,{_,Pid1,Pid,_,_,_}}|T])->
+  X=is_process_alive(Pid1),
+  if
+    X=:=true->   gen_statem:stop(Pid),
+      stopProcess(T);
+    true->stopProcess(T)
+
+  end.
+
+
+deleteResults(L)->
+  receive
+    {X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
+
+  after 0->L
+  end
+
+
+
+
+.

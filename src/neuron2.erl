@@ -72,7 +72,14 @@ state_name(_EventType, _EventContent, State = #neuron2_state{}) ->
 
 initialize({call,From}, {NN_manger_PID,{Id,AF,Input_PIdPs,Output_PIds,Bias}}, State = #neuron2_state{}) ->
   NextStateName = idle,
-  {next_state, NextStateName, State#neuron2_state{manger_pid = NN_manger_PID,outputPIds = Output_PIds, id=Id,af=AF,acc=0,inputPIDs2 =maps:from_list(Input_PIdPs) ,inputPIDs =maps:from_list(Input_PIdPs),bias = Bias},[{reply,From,ok}]}.
+  {next_state, NextStateName, State#neuron2_state{manger_pid = NN_manger_PID,outputPIds = Output_PIds, id=Id,af=AF,acc=0,inputPIDs2 =maps:from_list(Input_PIdPs) ,inputPIDs =maps:from_list(Input_PIdPs),bias = Bias},[{reply,From,ok}]};
+
+
+
+initialize(_Message,_Type,State=#neuron2_state{})->
+  {keep_state, State#neuron2_state{}}.
+
+
 
 %% idle when its sensor
 idle(cast,{insert_input,NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
@@ -173,6 +180,7 @@ code_change(_OldVsn, StateName, State = #neuron2_state{}, _Extra) ->
 
 
 af(AccToAdd,AF) ->
+
 case AF of
  relu-> case AccToAdd > 0 of
     true -> AccToAdd;
@@ -192,9 +200,14 @@ end.
 
  %th:cos(AccToAdd).
 
-handle_common({call,From}, {_XFrom,reset},State = #neuron2_state{}) ->
-  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]};
+handle_common(cast, {_XFrom,reset},State = #neuron2_state{}) ->
+  deleteResults([]),
+  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs}};
 
+
+handle_common({call,From}, {_XFrom,reset},State = #neuron2_state{}) ->
+  deleteResults([]),
+  {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]};
 
 handle_common({call,From}, {_XFrom,new_neighbour_out,ID},State = #neuron2_state{}) ->
   L=State#neuron2_state.outputPIds,
@@ -216,3 +229,11 @@ handle_common({call,From}, {_XFrom,newWeight,{ID,Weight}},State = #neuron2_state
 
 handle_common({call,From}, {_XFrom,newAF,NewAF},State = #neuron2_state{}) ->
   {next_state,idle, State#neuron2_state{af = NewAF},[{reply,From,af_changed}]}.
+
+
+deleteResults(L)->
+  receive
+    {X,{From,forward,Result}}->deleteResults(L++[{From,result,Result}])
+
+  after 0->L
+  end.
