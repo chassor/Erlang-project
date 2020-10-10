@@ -5,7 +5,7 @@
 -module(population).
 -author("DOR").
 -behaviour(gen_statem).
--export([start_link/9,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3]).
+-export([start_link/9,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3,compile_all/0]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -23,7 +23,7 @@
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
 start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID) ->
-  {_,PID }= gen_statem:start_link({local,ID}, ?MODULE, {Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID},[]),
+  {_,PID }= gen_statem:start_link({global,ID}, ?MODULE, {Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID},[]),
   PID.
 
 %%%===================================================================
@@ -35,6 +35,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
+  io:format("im in node1 , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,
     inputs = Inputs,
@@ -51,6 +52,7 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
 idle(cast,{start_insert},State = #population_state{})->
+  io:format("im in node1 idle state"),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
@@ -83,7 +85,8 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 
-network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{})->
+network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
+  io:format("im in node1 computation state"),
 Fitness = fitness(NN_Result,0),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -101,7 +104,8 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
-      MangerPid ! {self(),new_gen_hit_me,Result_for_master},
+      %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
+     gen_server:cast({global,master},{Id,new_gen_hit_me,Result_for_master}),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
@@ -233,6 +237,7 @@ generate_id() ->
 
 insert_inputs([],_)->ok;
 insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
+  io:format("im in pop insert mean the gen cast works"),
   gen_statem:cast(PID,{self(),insert_input,Inputs}),
   insert_inputs(T,Inputs).
 
@@ -246,4 +251,8 @@ update_fitness_map(M,[{Key,_}|T]) ->
   update_fitness_map(M2,T).
 
 
+compile_all()->
+  compile:file('nn_agent'),
+  compile:file('neuron2'),
+  compile:file('mutate_generator').
 

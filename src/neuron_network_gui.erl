@@ -4,7 +4,7 @@
 -export([start/1, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node}).
 
 start(Node) ->
   wx_object:start_link({local,?SERVER},?MODULE,[global,Node],[]),
@@ -21,10 +21,12 @@ initiation(_Mode,_Node) ->
   wx:new(),
   Choices = ["ReLU","tanh","Binary step","Sin"], %supported algorithms
   GParent = wxWindow:new(),
-  Parent = wxFrame:new(GParent, 1, "neuroevolution gu" ,[{size,{600, 600}}]), %create frame
+  Parent = wxFrame:new(GParent, 1, "neuroevolution gui" ,[{size,{600, 600}}]), %create frame
   Panel = wxPanel:new(Parent, []), %create panel
 
   %% Setup sizer
+  FirstNodeSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
+    [{label, "insert Nodes (separated by ',')"}]),
 
   MainSizer = wxBoxSizer:new(?wxVERTICAL),
   ChoicePickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
@@ -43,6 +45,8 @@ initiation(_Mode,_Node) ->
     [{label, " start Neuroevolution calculation"}]),
   LogSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "log"}]),
+  Nodes  = wxTextCtrl:new(Panel, 5, [{value, ""},
+    {style, ?wxDEFAULT}]),
 
   Choice = wxListBox:new(Panel, 7, [{choices, Choices}]),
   LayersPicker = wxSpinCtrl:new(Panel, []),
@@ -72,6 +76,7 @@ initiation(_Mode,_Node) ->
   wxSizer:add(NetworksPickerSizer, NetworksPicker, PickerOptions),
   wxSizer:add(ButtonPickerSizer, ButtonPicker, PickerOptions),
   wxSizer:add(LogSizer, Log, PickerOptions),
+  wxSizer:add(FirstNodeSizer, Nodes, PickerOptions),
 
   wxSizer:add(ChoicePickerSizer, Choice, PickerOptions),
 
@@ -85,6 +90,7 @@ initiation(_Mode,_Node) ->
   wxSizer:add(MainSizer, NetworksPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, ButtonPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, LogSizer, SizerOptions),
+  wxSizer:add(MainSizer, FirstNodeSizer, SizerOptions),
 
   wxPanel:setSizer(Panel, MainSizer),
    %{ok,Pid} = main:start_link(), ----------- mybe on the click event ..
@@ -95,19 +101,20 @@ initiation(_Mode,_Node) ->
 
 
      State = #state{
-      clicked=0,
-     activation_function=Choice,
-    neurons=NeuronsPicker,
-    layers=LayersPicker,
-    sensors=SensorsPicker,
-    actuators=ActuatorsPicker,
+       clicked=0,
+       activation_function=Choice,
+       neurons=NeuronsPicker,
+       layers=LayersPicker,
+       sensors=SensorsPicker,
+       actuators=ActuatorsPicker,
        nn = NetworksPicker,
-    frame=Parent,
+       frame=Parent,
        main_pid = Pid,
        log=Log,
        button = ButtonPicker,
        image = W,
-    panel=Panel}.
+       node = Nodes,
+       panel=Panel}.
 
 
 
@@ -124,9 +131,11 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       frame=Parent,
       panel=_Panel,
       button = B,
+      node = Node,
       clicked=Click}) ->
 
-       if
+      Noeds_List=string:split(wxTextCtrl:getValue(Node),",",all),
+  if
 
         Click=:=0 -> %check if the previous run was completed and the file is valid
         Neurons = wxSpinCtrl:getValue(NeuronsP), %get the Neurons
@@ -141,16 +150,15 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
           AF = coosen_AF(ReLU,Tanh,Binary_step,Sin),
           if
             AF =:= empty -> AF2 = relu;
-
             true -> AF2 = AF
           end,
-          io:format("i'm in the start gui case ~n ",[]),
+          %io:format("i'm in the start gui case ~n ",[]),
           Pid = State#state.main_pid,
          {Pid ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
          Click2 = 1 ,
-         wxButton:setLabel(B,"press_to_terminate_network"),
+         wxButton:setLabel(B,"press to terminate network"),
           wxPanel:refresh(Parent); %refresh the panel
           %wxTextCtrl:changeValue(Log, " networks calculating");
     true ->
@@ -297,4 +305,21 @@ sotrcut([H|T],L)->
       H_Float= float(H),
       L2= L ++ [float_to_list(H_Float,[{decimals,2}])],
       sotrcut(T,L2)
+  end.
+
+
+ping_sm([])->[];
+ping_sm([H|T] ) ->
+  Length = length(lists:flatten(H)),
+  if
+    Length > 1 -> [ping_it(H)]++ ping_sm(T);
+    true -> ping_sm(T)
+  end.
+ping_it(NodeAd)->
+  io:format("send ping to : ~p", [NodeAd]),
+  Result = net_adm:ping(list_to_atom(NodeAd)),
+
+  if
+    Result==pong -> list_to_atom(NodeAd);
+    true -> []
   end.
