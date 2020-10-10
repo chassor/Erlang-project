@@ -35,6 +35,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
+  process_flag(trap_exit, true),
   io:format("im in node1 , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,

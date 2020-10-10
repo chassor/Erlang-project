@@ -1,23 +1,23 @@
--module(neuron_network_gui).
+-module(gui).
 -behaviour(wx_object).
 -import(util,[integer_to_atom/1]).
--export([start/1, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
+-export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
 -record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node}).
 
-start(Node) ->
-  wx_object:start_link({local,?SERVER},?MODULE,[global,Node],[]),
-  receive
-    {loop}->ok
-  end.
+start(Node,Name,Pid) ->
+  wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
+%%  receive
+%%    {loop}->ok
+%%  end.
 
 
-init([Mode,Node]) ->
-  InitState = initiation(Mode,Node),
+init([Mode,Node,Pid]) ->
+  InitState = initiation(Mode,Node,Pid),
   {InitState#state.frame,InitState}.
 
-initiation(_Mode,_Node) ->
+initiation(_Mode,_Node,Pid) ->
   wx:new(),
   Choices = ["ReLU","tanh","Binary step","Sin"], %supported algorithms
   GParent = wxWindow:new(),
@@ -93,8 +93,6 @@ initiation(_Mode,_Node) ->
   wxSizer:add(MainSizer, FirstNodeSizer, SizerOptions),
 
   wxPanel:setSizer(Panel, MainSizer),
-   %{ok,Pid} = main:start_link(), ----------- mybe on the click event ..
-   Pid =  spawn(main2 , loop, [self()]),
    wxFrame:show(Parent),
 
    W= wx:new(),
@@ -109,12 +107,12 @@ initiation(_Mode,_Node) ->
        actuators=ActuatorsPicker,
        nn = NetworksPicker,
        frame=Parent,
-       main_pid = Pid,
        log=Log,
        button = ButtonPicker,
        image = W,
        node = Nodes,
-       panel=Panel}.
+       panel=Panel,
+     main_pid = Pid}.
 
 
 
@@ -134,7 +132,7 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       node = Node,
       clicked=Click}) ->
 
-      Noeds_List=string:split(wxTextCtrl:getValue(Node),",",all),
+      Nodes_List=[list_to_atom(A)||A<-string:split(wxTextCtrl:getValue(Node),",",all)],
   if
 
         Click=:=0 -> %check if the previous run was completed and the file is valid
@@ -154,7 +152,8 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
           end,
           %io:format("i'm in the start gui case ~n ",[]),
           Pid = State#state.main_pid,
-         {Pid ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
+          gen_server:cast(Pid,{start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List}),
+   %      {Pimaind ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
          Click2 = 1 ,
