@@ -16,11 +16,11 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3]).
+  code_change/3, num_of_alive_processes/0]).
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run}).
 
 %%%===================================================================
 %%% API
@@ -44,7 +44,7 @@ init([]) ->
   process_flag(trap_exit, true),
   {_A,_B,_C,D}=gui:start(node(),gui_nn,self()),
 
-  {ok, #master_state{guiName =gui_nn,guiPid = D,highestScore = 1000000000}}.
+  {ok, #master_state{guiName =gui_nn,guiPid = D }}.
 
 %% @private
 %% @doc Handling call messages
@@ -91,11 +91,12 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%  {noreply, State};
 
 handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
+  Num_of_live = num_of_alive_processes(),
   Inputs = generate_inputs(Sensors,[]),
   %trytoconnect(Nodes)  ---- for terminal
   Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
   A=insert_cast(maps:to_list(Map)),
-  {noreply, State#master_state{nodes_Map = Map}};
+  {noreply, State#master_state{nodes_Map = Map ,highestScore = 1000000000}};
 
 handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score}) ->
   {NewScore,_,_} = Result,
@@ -110,9 +111,11 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
   {noreply, State#master_state{highestScore = Score2}};
 
 handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
+  Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
-  [gen_statem:stop({global,Name})||{Name,_Node} <- L],
-  {noreply, State#master_state{highestScore = 1000000000}}.
+  stopProcess(L),
+  gen_statem:cast(gui_nn,{finish_terminate}),
+  {noreply, State#master_state{highestScore = -10000000000000}}.
 
 
 
@@ -153,23 +156,20 @@ code_change(_OldVsn, State = #master_state{}, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-startChat([],Map,_,_,_,_,_,_,_,_) ->
-  register(master_pid,erlang:self()),%% Save the Pid of the local host process
-  Map;
+startChat([],Map,_,_,_,_,_,_,_,_) -> Map;
 
 startChat([Address|T],Map,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
   N = maps:size(Map)+1,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [N]))),
-  M2 = maps:put(PopulationID,Address,Map),
-  case whereis(master_pid) of
-    undefined ->
      Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
       if
-        is_pid(Answer)->startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
+        is_pid(Answer)->
+          M2 = maps:put(PopulationID,{Address,Answer},Map),
+          startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
         true ->  io:format("wrong rpc cast to population")
-      end;
-    _ -> io:format("You already started a chat~n")
-  end.
+      end.
+
+
 
 generate_id() ->
   {MegaSeconds,Seconds,MicroSeconds} = now(),
@@ -201,3 +201,29 @@ insert_cast([])->ok;
 insert_cast([{KEY,_V}|T]) ->
   Answer=gen_statem:cast({global,KEY},{start_insert}),
   insert_cast(T).
+
+
+num_of_alive_processes() ->
+  L5= processes(),
+  L6=[is_process_alive(A)|| A<-L5],
+  L7=[true || true<-L6],
+  L=length(L7),
+  L.
+
+stopProcess([])->ok;
+stopProcess([{Name,{_Node,Pid}}|T])->
+  X=is_process_alive(Pid),
+  if
+    X=:=true->
+      gen_statem:stop({global,Name}),
+      stopProcess(T);
+    true->stopProcess(T)
+
+  end.
+
+deleteResults(L)->
+  receive
+    {X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
+
+  after 0->L
+  end.

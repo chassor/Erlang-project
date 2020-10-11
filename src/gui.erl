@@ -4,7 +4,7 @@
 -export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag}).
 
 start(Node,Name,Pid) ->
   wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
@@ -60,7 +60,7 @@ initiation(_Mode,_Node,Pid) ->
   NetworksPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(NetworksPicker, 1, 250),
   ButtonPicker = wxButton:new(Panel, 10, [{label, "press to start"}]),
-  Log = wxTextCtrl:new(Panel, 7, [{value, "insert initial values for networs please :)"},
+  Log = wxTextCtrl:new(Panel, 7, [{value, "insert initial values for networs please :) "},
     {style, ?wxDEFAULT}]),
 
 
@@ -100,6 +100,7 @@ initiation(_Mode,_Node,Pid) ->
 
      State = #state{
        clicked=0,
+       flag = run,
        activation_function=Choice,
        neurons=NeuronsPicker,
        layers=LayersPicker,
@@ -139,16 +140,18 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       Nodes_List2_for_dibug = ['nonode@nohost'],  %todo delete thid
   if
 
-        Click=:=0 -> %check if the previous run was completed and the file is valid
-        Neurons = wxSpinCtrl:getValue(NeuronsP), %get the Neurons
-        Layers = wxSpinCtrl:getValue(LayersP), %get the Layers
-        Sensors = wxSpinCtrl:getValue(SensorsP), %get the Sensors
-        Actuators = wxSpinCtrl:getValue(ActuatorsP), %get the Actuators
-         NN = wxSpinCtrl:getValue(NNP), %get the nn number
-        ReLU=wxListBox:isSelected(Choice,0), %check if the user chose ReLU as the algorithm
-        Tanh =wxListBox:isSelected(Choice,1), %check if the user chose Tanh as the algorithm
-        Binary_step =wxListBox:isSelected(Choice,2), %check if the user chose Binary_step as the algorithm
-        Sin =wxListBox:isSelected(Choice,3), %check if the user chose Sigmoid as the algorithm
+          Click=:=0 -> %check if the previous run was completed and the file is valid
+            Deleted_List=deleteResults([]),
+            Flag2=run,
+          Neurons = wxSpinCtrl:getValue(NeuronsP), %get the Neurons
+          Layers = wxSpinCtrl:getValue(LayersP), %get the Layers
+          Sensors = wxSpinCtrl:getValue(SensorsP), %get the Sensors
+          Actuators = wxSpinCtrl:getValue(ActuatorsP), %get the Actuators
+           NN = wxSpinCtrl:getValue(NNP), %get the nn number
+         ReLU=wxListBox:isSelected(Choice,0), %check if the user chose ReLU as the algorithm
+         Tanh =wxListBox:isSelected(Choice,1), %check if the user chose Tanh as the algorithm
+         Binary_step =wxListBox:isSelected(Choice,2), %check if the user chose Binary_step as the algorithm
+         Sin =wxListBox:isSelected(Choice,3), %check if the user chose Sigmoid as the algorithm
           AF = coosen_AF(ReLU,Tanh,Binary_step,Sin),
 
           if
@@ -161,19 +164,23 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
          Click2 = 1 ,
-         wxButton:setLabel(B,"press to terminate network"),
-          wxPanel:refresh(Parent); %refresh the panel
-          %wxTextCtrl:changeValue(Log, " networks calculating");
+            wxButton:setLabel(B,"building nn"),
+            wxPanel:refresh(Parent); %refresh the panel
     true ->
+      Flag2 = stop,
       gen_server:cast(Pid,{stop}),
       Click2 = 0 ,
+      terminating_func(3,Parent,B),
       wxButton:setLabel(B,"start"),
       wxTextCtrl:changeValue(Log, "you can start again with different values"),
       wxPanel:refresh(Parent) %refresh the panel
-
   end,
 
-  {noreply, State#state{clicked=Click2}};
+  {noreply, State#state{clicked=Click2 , flag = Flag2}};
+
+
+
+
 
 handle_event(#wx{event = #wxClose{}}, %close window event, handle memory leak
     State = #state{ frame=Frame , panel=_Panel
@@ -195,14 +202,27 @@ handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply,Reply,State}.
 
-handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log}) ->
-  {Fitness,Result,G} = Outputs,
-  Result1=sotrcut(Result,[]),
-  toGraph:generateGraph(G),
-  toGraph:replaceImage(State#state.pic_panel),
-  wxTextCtrl:changeValue(Log, ""), %clean the log
-  wxTextCtrl:writeText(Log, lists:flatten(io_lib:format("Fitness: ~p ,outputs list:~p", [Fitness,Result1]))),
-  wxPanel:refresh(Frame), %refresh the panel
+handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B }) ->
+  if
+      Flag =:= run ->
+      {Fitness,Result,G} = Outputs,
+      Result1=sotrcut(Result,[]),
+        try
+        toGraph:generateGraph(G)
+        catch
+          _Reason->
+                     io:format(" the failed reason is : ~p, ~n", [_Reason])
+        end,
+
+      toGraph:replaceImage(State#state.pic_panel),
+      wxTextCtrl:changeValue(Log, ""), %clean the log
+      wxTextCtrl:writeText(Log, lists:flatten(io_lib:format("Fitness: ~p , outputs list: ~p", [Fitness,Result1]))),
+        wxButton:setLabel(B,"press to terminate network"),
+      wxPanel:refresh(Frame); %refresh the panel ;
+      true ->
+        L=deleteResults([])
+  end,
+
   {noreply,State#state{}};
 
 handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
@@ -328,3 +348,27 @@ ping_it(NodeAd)->
     Result==pong -> list_to_atom(NodeAd);
     true -> []
   end.
+
+
+all_messages(Messages) ->
+  receive
+    AnyMessage ->
+      all_messages( [AnyMessage|Messages])
+  after 0 ->
+    lists:reverse(Messages)
+  end.
+
+deleteResults(L)->
+  receive
+    {done,{Fitness,Result,G}}->deleteResults(L++[{done,{Fitness,Result,G}}])
+  after 0->L
+  end.
+
+terminating_func(0,_,_)->ok;
+terminating_func(N,Parent,B) ->
+  deleteResults([]),
+  wxButton:setLabel(B, lists:flatten(io_lib:format("terminating in ----> ~p ", [N]))),
+  %wxButton:setLabel(B,"terminating"),
+  wxPanel:refresh(Parent), %refresh the panel
+  timer:sleep(1000),
+  terminating_func(N-1,Parent,B).
