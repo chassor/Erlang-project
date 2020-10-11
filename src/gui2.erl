@@ -41,7 +41,7 @@ start_link() ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init([]) ->
-  L=['node1@DESKTOP-V723826'],
+  L=['nonode@nohost'],
   {_,Pid} = gen_server:start_link(master,[],[]),
   click_event(L,Pid),
   {ok, wait, #gui2_state{ nodes = L , result = [] ,master_pid = Pid}}.
@@ -115,6 +115,6 @@ click_event(Nodes,Pid) ->
   Sensors = 3,Actuators = 5,Layers =4,  Neurons =3  ,AF = sin ,NN = 10,
   Answer = gen_server:call(Pid,{init,Sensors ,Actuators ,Layers,  Neurons ,AF ,NN,Nodes}),
   if
-    Answer =:= ok -> gen_server:cast(master,{start}) ;
+    Answer =:= ok  -> gen_server:cast(Pid,{start}) ;
     true -> io:format("wrong init for master")
   end.

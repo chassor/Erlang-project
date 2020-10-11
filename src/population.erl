@@ -88,7 +88,6 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
   io:format("im in node1 computation state ~n"),
-  XX=1/(3-rand:uniform(8)),
 Fitness = fitness(NN_Result,0),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
