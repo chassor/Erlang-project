@@ -91,13 +91,12 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
   io:format("im in node1 computation state ~n"),
-  XX=1/(3-rand:uniform(8)),
-Fitness = fitness(NN_Result,0),
+Fitness = std_fitness(NN_Result),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
   Size = maps:size(Counter),
   if
-    Size =:= 0 ->
+     Size =:= 0 ->
       MAP=State#population_state.nn_pids_map,
       R = split_nn(UpdateFitnessMap),
       BestNN  = element(1,R),
@@ -185,11 +184,9 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
   %%List=lists:append(Inputs_List,Outputs_List),
   %%fitness(List,Sum).
 
-fitness([],Sum)->
-  abs(3-math:sqrt(Sum));
-fitness([H|T],Sum)->
-  Sum2=Sum+(H*H),
-fitness(T,Sum2).
+
+
+
 
 create_NN_Agents(0,Map,_)->Map;
 create_NN_Agents(N,Map,S)->
@@ -281,3 +278,26 @@ c()->
   compile:file('neuron2'),
   compile:file('mutate_generator').
 
+
+avg(List)->
+  lists:sum(List)/length(List).
+
+
+std_fitness(List)->
+  Avg = avg(List),
+  std_fitness(List,Avg,[]).
+
+std_fitness([Val|List],Avg,Acc)->
+  std_fitness(List,Avg,[math:pow(Avg-Val,2)|Acc]);
+std_fitness([],_Avg,Acc)->
+  Variance = lists:sum(Acc)/length(Acc),
+  math:sqrt(Variance).
+
+fitness(L)->fitness(L,0).
+
+fitness([],Sum)->
+  abs(3-math:sqrt(Sum));
+
+fitness([H|T],Sum)->
+  Sum2=Sum+(H*H),
+  fitness(T,Sum2).

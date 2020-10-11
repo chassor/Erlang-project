@@ -113,7 +113,8 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
 handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
   Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
-  [gen_statem:stop({global,Name})||{Name,_Node} <- L],
+  stopProcess(L),
+  gen_statem:cast(gui_nn,{finish_terminate}),
   {noreply, State#master_state{highestScore = -10000000000000}}.
 
 
@@ -160,10 +161,11 @@ startChat([],Map,_,_,_,_,_,_,_,_) -> Map;
 startChat([Address|T],Map,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
   N = maps:size(Map)+1,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [N]))),
-  M2 = maps:put(PopulationID,Address,Map),
      Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
       if
-        is_pid(Answer)->startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
+        is_pid(Answer)->
+          M2 = maps:put(PopulationID,{Address,Answer},Map),
+          startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
         true ->  io:format("wrong rpc cast to population")
       end.
 
@@ -207,3 +209,21 @@ num_of_alive_processes() ->
   L7=[true || true<-L6],
   L=length(L7),
   L.
+
+stopProcess([])->ok;
+stopProcess([{Name,{_Node,Pid}}|T])->
+  X=is_process_alive(Pid),
+  if
+    X=:=true->
+      gen_statem:stop({global,Name}),
+      stopProcess(T);
+    true->stopProcess(T)
+
+  end.
+
+deleteResults(L)->
+  receive
+    {X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
+
+  after 0->L
+  end.
