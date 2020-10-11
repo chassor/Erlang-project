@@ -55,6 +55,12 @@ to_dot(Graph, File) ->
 %  io:format(IODevice, "splines=line;~n", []),
   io:format(IODevice, "nodesep=0.001;center=true;~n", []),
   io:format(IODevice, "dpi= 100 ;ratio=\"fill\";size=\"14.7,7.3!\";margin=0;", []),
+%%  io:format(IODevice,  " label     = \"The title of the graph\";
+%%  labelloc  =  t;
+%%  fontsize  = 30;", []),
+
+
+
   % print nodes
   lists:foreach(
     fun({Label,Name,Bias,AF,_K}) ->
@@ -94,6 +100,10 @@ to_dot(Graph, File) ->
     end,
     Edges
   ),
+
+
+
+
 
   io:format(IODevice, "{ rank=min", []),
   [ io:format(IODevice, ";~s", [B])||{_A,B,_C,_D,sensor}<-Nodes],

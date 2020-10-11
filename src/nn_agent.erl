@@ -99,8 +99,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
   case maps:size(Map2) =:= 0 of
     true ->
 
-
-          PID_manager=State#nn_agent_state.manger_pid,
+         PID_manager=State#nn_agent_state.manger_pid,
       ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
      % PID_manager !{self(),result,ResultList},
      gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList}),
