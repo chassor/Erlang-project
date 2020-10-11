@@ -225,7 +225,8 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
         wxTextCtrl:changeValue(Log,"network in simulation"),
         wxButton:setLabel(B,"press to terminate network"),
        wxPanel:refresh(Frame), %refresh the panel
-       wxPanel:refresh(Frame2,[{eraseBackground,false}]);
+       wxPanel:refresh(FitTXT),
+        wxPanel:refresh(ResultTxT);
       true ->
         L=deleteResults([])
   end,
