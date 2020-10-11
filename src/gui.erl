@@ -4,7 +4,7 @@
 -export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT}).
 
 start(Node,Name,Pid) ->
   wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
@@ -94,7 +94,7 @@ initiation(_Mode,_Node,Pid) ->
 
   wxPanel:setSizer(Panel, MainSizer),
    wxFrame:show(Parent),
-  {Frame2,Panel2}=toGraph:createFrame(),
+  {Frame2,Panel2,ResTXT,FitTXT,GenTXT}=toGraph:createFrame(),
    W= wx:new(),
 
 
@@ -109,6 +109,9 @@ initiation(_Mode,_Node,Pid) ->
        nn = NetworksPicker,
        frame=Parent,
        log=Log,
+       resTXT =  ResTXT,
+       fitTXT = FitTXT,
+       genTXT = GenTXT,
        button = ButtonPicker,
        image = W,
        node = Nodes,
@@ -202,11 +205,11 @@ handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply,Reply,State}.
 
-handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B }) ->
+handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
   if
       Flag =:= run ->
       {Fitness,Result,G} = Outputs,
-      Result1=sotrcut(Result,[]),
+      Result1=shortcut(Result,[]),
         try
         toGraph:generateGraph(G)
         catch
@@ -215,10 +218,14 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
         end,
 
       toGraph:replaceImage(State#state.pic_panel),
-      wxTextCtrl:changeValue(Log, ""), %clean the log
-      wxTextCtrl:writeText(Log, lists:flatten(io_lib:format("Fitness: ~p , outputs list: ~p", [Fitness,Result1]))),
+        %wxTextCtrl:changeValue(Log, ""), %clean the log
+        wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
+        wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
+        %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
+        wxTextCtrl:changeValue(Log,"network in simulation"),
         wxButton:setLabel(B,"press to terminate network"),
-      wxPanel:refresh(Frame); %refresh the panel ;
+       wxPanel:refresh(Frame), %refresh the panel
+       wxPanel:refresh(Frame2,[{eraseBackground,false}]);
       true ->
         L=deleteResults([])
   end,
@@ -227,7 +234,7 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
 
 handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
   {Fitness,Result,G} = Outputs,
-  Result1=sotrcut(Result,[]),
+  Result1=shortcut(Result,[]),
   wxTextCtrl:changeValue(Log, ""), %clean the log
   wxTextCtrl:changeValue(Log, "you can start again with different values"),
   wxPanel:refresh(Frame), %refresh the panel
@@ -319,17 +326,17 @@ redraw(Image, #wx{obj=Panel}) ->
   DC = wxPaintDC:new(Panel),
   wxDC:drawBitmap(DC,Image,{0,0}).
 
-sotrcut([],L)->L;
-sotrcut([H|T],L)->
+shortcut([],L)->L;
+shortcut([H|T],L)->
   if
       H=:=0 ->
         round(H),
       L2 = L ++ [H],
-      sotrcut(T,L2) ;
+      shortcut(T,L2) ;
     true ->
       H_Float= float(H),
-      L2= L ++ [float_to_list(H_Float,[{decimals,2}])],
-      sotrcut(T,L2)
+      L2= L ++ [float_to_list(H_Float,[{decimals,4}])],
+      shortcut(T,L2)
   end.
 
 
