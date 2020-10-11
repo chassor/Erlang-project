@@ -36,7 +36,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
   process_flag(trap_exit, true),
- % io:format("im in node1 , my id is : ~p ~n" , [ID]),
+ io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,
     inputs = Inputs,
@@ -52,8 +52,8 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
   Map2= received_graphs(Map,maps:to_list(Map)),
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
-idle(cast,{start_insert},State = #population_state{})->
-%  io:format("im in node1 idle state ~n"),
+idle(cast,{start_insert},State = #population_state{id = Id})->
+  io:format("pop: im in ~p idle state ~n" ,[Id]),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
@@ -90,7 +90,7 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
-  io:format("im in node1 computation state ~n"),
+  io:format("pop: im in node1 network_in_computation state ~n"),
 Fitness = std_fitness(NN_Result),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -190,6 +190,7 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
 
 create_NN_Agents(0,Map,_)->Map;
 create_NN_Agents(N,Map,S)->
+  io:format("pop:create_NN_Agents ~n"),
   Key = genarateIdfromAtom(),
   PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,
     S#population_state.numOfNeuronsEachLayer,self(),Key,new),
@@ -259,7 +260,7 @@ generate_id() ->
 
 insert_inputs([],_)->ok;
 insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
-  io:format("im in pop insert mean the gen cast works ~n"),
+  io:format("pop: im in pop insert mean the gen cast works ~n"),
   gen_statem:cast(PID,{self(),insert_input,Inputs}),
   insert_inputs(T,Inputs).
 
