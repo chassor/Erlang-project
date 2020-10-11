@@ -35,8 +35,8 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
-  %process_flag(trap_exit, true),
-  io:format("im in node1 , my id is : ~p ~n" , [ID]),
+  process_flag(trap_exit, true),
+ % io:format("im in node1 , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,
     inputs = Inputs,
@@ -53,12 +53,15 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
 idle(cast,{start_insert},State = #population_state{})->
-  io:format("im in node1 idle state ~n"),
+%  io:format("im in node1 idle state ~n"),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
   NextStateName = network_in_computation,
-  {next_state, NextStateName, State}.
+  {next_state, NextStateName, State};
+
+idle(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data,idle).
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
@@ -88,6 +91,7 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
   io:format("im in node1 computation state ~n"),
+  XX=1/(3-rand:uniform(8)),
 Fitness = fitness(NN_Result,0),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -111,7 +115,11 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
       true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
-  end.
+  end;
+
+
+network_in_computation(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data,network_in_computation).
 
 create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
   Tuple={element(1,maps:get(KEY,State#population_state.nn_pids_map)),Mutation_G},
@@ -124,11 +132,27 @@ create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population
       MangerPid ! {self(),new_gen_hit_me},
       {next_state,idle,State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2  }}  ;
     true -> {keep_state,State#population_state{nn_pids_map2 = Counter , nn_pids_map = Map2 }}
-  end.
+  end;
+
+create_new_generation(EventType, EventContent, Data) ->
+  handle_common(EventType, EventContent, Data,create_new_generation).
 
 
 
+handle_common(info, {'EXIT',PID,normal},State = #population_state{},CuRR_State) ->
+   {keep_state, State};
 
+handle_common(info, {'EXIT',PID,_Reason},State = #population_state{},CuRR_State) ->
+  {keep_state, State}
+;
+
+
+
+handle_common(info,_,State = #population_state{},_State) ->
+  {keep_state, State};
+
+handle_common(_,_,State = #population_state{},_State) ->
+  {keep_state, State}.
 
 %% @private
 %% @doc If callback_mode is handle_event_function, then whenever a
