@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore}).
 
 %%%===================================================================
 %%% API
@@ -44,7 +44,7 @@ init([]) ->
   process_flag(trap_exit, true),
   {_A,_B,_C,D}=gui:start(node(),gui_nn,self()),
 
-  {ok, #master_state{guiName =gui_nn,guiPid = D}}.
+  {ok, #master_state{guiName =gui_nn,guiPid = D,highestScore = 1000000000}}.
 
 %% @private
 %% @doc Handling call messages
@@ -68,6 +68,9 @@ handle_call({init,Sensors ,Actuators ,Layers,  Neurons ,AF ,NN , Nodes},From, St
   {reply, ok, State#master_state{nodes_Map = Map}};
 
 
+
+
+
 handle_call(_Request, _From, State = #master_state{}) ->
   {reply, ok, State}.
 
@@ -87,28 +90,44 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%handle_cast(_Request, State = #master_state{}) ->
 %%  {noreply, State};
 
-handle_cast({start,From ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
+handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
   Inputs = generate_inputs(Sensors,[]),
+  %trytoconnect(Nodes)  ---- for terminal
   Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
-  trytoconnect(Nodes),
+  A=insert_cast(maps:to_list(Map)),
+  {noreply, State#master_state{nodes_Map = Map}};
 
+handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score}) ->
+  {NewScore,_,_} = Result,
+  if
+    NewScore < Score ->
+      Score2 = NewScore,
+      timer:sleep(2000),
+      gen_statem:cast(gui_nn,{done,Result}) ;
+    true -> Score2 = Score
+  end,
+  gen_statem:cast({global,Pop_name},{start_insert}),
+  {noreply, State#master_state{highestScore = Score2}};
 
-
-  %[gen_statem:cast({global,X},{start_insert}) || X <-maps:keys(Nodes) ],
-  {noreply, State};
-
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ nodes_Map = Nodes}) ->
-  gen_statem:cast(gui2,{Pop_name,result,Result}),
-  {noreply, State}.
+handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
+  L = maps:to_list(Nodes),
+  [gen_statem:stop({global,Name})||{Name,_Node} <- L],
+  {noreply, State#master_state{highestScore = 1000000000}}.
 
 
 
 %% @private
 %% @doc Handling all non call/cast messages
 -spec(handle_info(Info :: timeout() | term(), State :: #master_state{}) ->
-  {noreply, NewState :: #master_state{}} |
-  {noreply, NewState :: #master_state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #master_state{}}).
+  {noreply, NewState :: #master_state{}}|
+{noreply, NewState :: #master_state{}, timeout() | hibernate} |
+{stop, Reason :: term(), NewState :: #master_state{}}).
+handle_info({'EXIT',PID,normal}, State = #master_state{}) ->
+  {noreply, State};
+
+handle_info({'EXIT',PID,_Reason}, State = #master_state{}) ->
+  {noreply, State};
+
 handle_info(_Info, State = #master_state{}) ->
   {noreply, State}.
 
@@ -144,9 +163,9 @@ startChat([Address|T],Map,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeu
   M2 = maps:put(PopulationID,Address,Map),
   case whereis(master_pid) of
     undefined ->
-      Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
+     Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
       if
-        Answer->startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
+        is_pid(Answer)->startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
         true ->  io:format("wrong rpc cast to population")
       end;
     _ -> io:format("You already started a chat~n")
@@ -170,6 +189,15 @@ random_input()->
     2-> Y=-1*X
   end,
   Y.
-
+trytoconnect([])->ok;
 trytoconnect([H|T]) ->
-  erlang:error(not_implemented).
+ A =net_kernel:connect_node(H),
+  if
+    A =:= true -> trytoconnect(T)  ;
+    true ->  io:format(" connection mistake")
+  end.
+
+insert_cast([])->ok;
+insert_cast([{KEY,_V}|T]) ->
+  Answer=gen_statem:cast({global,KEY},{start_insert}),
+  insert_cast(T).

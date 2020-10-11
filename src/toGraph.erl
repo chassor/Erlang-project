@@ -24,7 +24,7 @@ generateGraph(G)->
 
 
   Graph = { "G" , {digraph ,"->"} ,[],L2,L},
-  to_file( Graph ,"test1.png", "png"),
+  to_file( Graph ,"dor.png", "png"),
   Graph.
 
 to_file(Graph, File, Format) ->
@@ -161,7 +161,7 @@ createFrame()->
 
 
 replaceImage(Panel) ->
-PictureDraw1 = wxImage:new("test1.png"),
+PictureDraw1 = wxImage:new("dor.png"),
 PictureDraw=wxImage:rescale(PictureDraw1,1400,700,[{quality,?wxIMAGE_QUALITY_HIGH}]),
 Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),

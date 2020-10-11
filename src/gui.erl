@@ -4,7 +4,7 @@
 -export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel}).
 
 start(Node,Name,Pid) ->
   wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
@@ -94,7 +94,7 @@ initiation(_Mode,_Node,Pid) ->
 
   wxPanel:setSizer(Panel, MainSizer),
    wxFrame:show(Parent),
-
+  {Frame2,Panel2}=toGraph:createFrame(),
    W= wx:new(),
 
 
@@ -112,7 +112,9 @@ initiation(_Mode,_Node,Pid) ->
        image = W,
        node = Nodes,
        panel=Panel,
-     main_pid = Pid}.
+     main_pid = Pid,
+       pic_frame = Frame2,
+       pic_panel = Panel2}.
 
 
 
@@ -129,10 +131,12 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       frame=Parent,
       panel=_Panel,
       button = B,
+      main_pid = Pid,
       node = Node,
       clicked=Click}) ->
-
-      Nodes_List=[list_to_atom(A)||A<-string:split(wxTextCtrl:getValue(Node),",",all)],
+      L3=string:split(wxTextCtrl:getValue(Node),",",all),
+      Nodes_List=[list_to_atom(A)||A<-L3],
+      Nodes_List2_for_dibug = ['nonode@nohost'],  %todo delete thid
   if
 
         Click=:=0 -> %check if the previous run was completed and the file is valid
@@ -146,13 +150,13 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
         Binary_step =wxListBox:isSelected(Choice,2), %check if the user chose Binary_step as the algorithm
         Sin =wxListBox:isSelected(Choice,3), %check if the user chose Sigmoid as the algorithm
           AF = coosen_AF(ReLU,Tanh,Binary_step,Sin),
+
           if
             AF =:= empty -> AF2 = relu;
             true -> AF2 = AF
           end,
           %io:format("i'm in the start gui case ~n ",[]),
-          Pid = State#state.main_pid,
-          gen_server:cast(Pid,{start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List}),
+          A=gen_server:cast(Pid,{start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List2_for_dibug}),%todo change to nodes list
    %      {Pimaind ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
@@ -161,7 +165,7 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
           wxPanel:refresh(Parent); %refresh the panel
           %wxTextCtrl:changeValue(Log, " networks calculating");
     true ->
-      {State#state.main_pid ! {stop}},
+      gen_server:cast(Pid,{stop}),
       Click2 = 0 ,
       wxButton:setLabel(B,"start"),
       wxTextCtrl:changeValue(Log, "you can start again with different values"),
@@ -194,18 +198,20 @@ handle_call(_Request, _From, State) ->
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log}) ->
   {Fitness,Result,G} = Outputs,
   Result1=sotrcut(Result,[]),
+  toGraph:generateGraph(G),
+  toGraph:replaceImage(State#state.pic_panel),
   wxTextCtrl:changeValue(Log, ""), %clean the log
   wxTextCtrl:writeText(Log, lists:flatten(io_lib:format("Fitness: ~p ,outputs list:~p", [Fitness,Result1]))),
   wxPanel:refresh(Frame), %refresh the panel
-  {noreply,State#state{clicked=1}};
+  {noreply,State#state{}};
 
-handle_cast({final_result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
+handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
   {Fitness,Result,G} = Outputs,
   Result1=sotrcut(Result,[]),
   wxTextCtrl:changeValue(Log, ""), %clean the log
   wxTextCtrl:changeValue(Log, "you can start again with different values"),
   wxPanel:refresh(Frame), %refresh the panel
-  toGraph:generateGraph(G),
+
   run3(W),
   {Pid ! {terminate}},
   {noreply,State#state{clicked=0}};
