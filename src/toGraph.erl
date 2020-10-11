@@ -155,18 +155,70 @@ creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
 
 createFrame()->
   W = wx:new(),
-  Frame = wxFrame:new(W, -1, "result",[{size, {1420, 740}}]),
+  Frame = wxFrame:new(W, -1, "result",[{size, {1500, 740}}]),
   Panel = wxPanel:new(Frame,[{size, {1400, 700}}]),
-  Label = wxStaticText:new(Frame, ?wxID_ANY, "neuron network"),
+  Panel2 = wxPanel:new(Frame,[{size, {1400, 700}}]),
+
+%%  TextCtrlNeurons = wxTextCtrl:new(Frame, ?wxID_ANY,  [{value, "example:4 3 6 7"}]),
+%%Font = wxFont:new(20, ?wxFONTFAMILY_ROMAN, ?wxFONTSTYLE_NORMAL, ?wxFONTWEIGHT_NORMAL),
+%%  wxTextCtrl:setFont(TextCtrlNeurons, Font),
+%% % Label = wxStaticText:new(Frame, ?wxID_ANY, "neuron network"),
   MainSizer = wxBoxSizer:new(?wxVERTICAL),
-  wxSizer:add(MainSizer, Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
+%%wxWindow:setSizer(Frame, MainSizer),
+%%  wxSizer:add(MainSizer, TextCtrlNeurons, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border,5}]),
+  Res_Label = wxStaticText:new(Panel, ?wxID_ANY, "results:", [{style, ?
+  wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Res_Label,100),
+  Fit_Label = wxStaticText:new(Panel, ?wxID_ANY, "fitness:", [{style, ?
+  wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Fit_Label,100),
+  Gen_Label = wxStaticText:new(Panel, ?wxID_ANY, "Gen:", [{style, ?wxDEFAULT}]),
+  wxStaticText:wrap(Gen_Label,100),
+  ResTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
+  wxTE_RIGHT}]),
+  FitTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
+  wxTE_RIGHT}]),
+  GenTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxDEFAULT}]),
+  Font = wxFont:new(15, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL,?
+  wxFONTWEIGHT_BOLD),
+  wxTextCtrl:setFont(Res_Label, Font),
+  wxTextCtrl:setFont(Fit_Label, Font),
+  wxTextCtrl:setFont(Gen_Label, Font),
+  wxTextCtrl:setFont(ResTXT, Font),
+  wxTextCtrl:setEditable(ResTXT, false),
+  wxTextCtrl:setFont(FitTXT, Font),
+  wxTextCtrl:setEditable(FitTXT, false),
+  wxTextCtrl:setFont(GenTXT, Font),
+  wxTextCtrl:setEditable(GenTXT, false),
+  CounterSizer = wxBoxSizer:new(?wxHORIZONTAL),
+  wxSizer:add(CounterSizer, Res_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
+    {border, 5}]),
+  wxSizer:add(CounterSizer, ResTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
+    {border, 5}]),
+  wxSizer:add(CounterSizer, FitTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
+    {border, 5}]),
+  wxSizer:add(CounterSizer, GenTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxALL}, {border, 5}]),
+  wxSizer:add(MainSizer, CounterSizer, [{flag, ?wxEXPAND}]),
+  wxSizer:add(MainSizer,Panel2, [{flag, ?wxEXPAND}]),
+  wxWindow:setSizer(Frame, MainSizer),
+  wxSizer:setSizeHints(MainSizer, Frame),
+  wxWindow:setMinSize(Frame, wxWindow:getSize(Frame)),
+  wxWindow:setMaxSize(Frame, wxWindow:getSize(Frame)),
   Vbox = wxBoxSizer:new(?wxVERTICAL),
   wxSizer:add(Vbox, Panel, [{flag, ?wxEXPAND}]),
-  {Width, Height} = wxPanel:getSize(Panel),
+
+  %wxSizer:add(MainSizer, TextCtrlNeurons, [{flag, ?wxALL bor ?wxEXPAND}, {border, 8}]),
+
+
 
   %PictureDrawScaled = wxImage:scale(PictureDraw, 1280, 720,[{quality,?wxIMAGE_QUALITY_HIGH}]),
   wxFrame:show(Frame),
-  {Frame,Panel}.
+  {Frame,Panel2,ResTXT,FitTXT,GenTXT}.
 
 
 
@@ -177,9 +229,10 @@ Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),
 F = fun(I, _) -> redraw(Image1,I) end,
 wxPanel:connect(Panel, paint, [{callback,F}]),
+
 % wxWindow:refresh(Panel,[{eraseBackground,false}]),
   Panel.
 
 redraw(Image, #wx{obj=Panel}) ->
   DC = wxBufferedPaintDC:new(Panel),
-  wxDC:drawBitmap(DC,Image,{0,0}).
+  wxDC:drawBitmap(DC,Image,{100,100}).
