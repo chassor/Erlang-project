@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/0, makeItCrash/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -227,3 +227,8 @@ deleteResults(L)->
 
   after 0->L
   end.
+
+
+makeItCrash(N)->
+  1/(1-rand:uniform(N))
+  .
