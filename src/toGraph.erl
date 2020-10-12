@@ -34,7 +34,6 @@ to_file(Graph, File, Format) ->
   DotCommant = lists:concat(["dot -T", Format, " -o", File, " ", DotFile]),
   X=os:cmd(DotCommant),
 
-
   file:delete(DotFile),
   X.
 
@@ -150,6 +149,7 @@ creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
 
   NewMap=maps:put(B,NewName,Map),
   creatMapOfNewNames(T, NewMap,N+1).
+
 
 
 

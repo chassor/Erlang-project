@@ -48,17 +48,19 @@ initiation(_Mode,_Node,Pid) ->
   Nodes  = wxTextCtrl:new(Panel, 5, [{value, ""},
     {style, ?wxDEFAULT}]),
 
+
+
   Choice = wxListBox:new(Panel, 7, [{choices, Choices}]),
   LayersPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(LayersPicker, 1, 1000),
+  wxSpinCtrl:setRange(LayersPicker, 2, 1000),
   NeuronsPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(NeuronsPicker, 1, 1000),
+  wxSpinCtrl:setRange(NeuronsPicker, 2, 1000),
   SensorsPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(SensorsPicker, 1, 1000),
+  wxSpinCtrl:setRange(SensorsPicker, 2, 1000),
   ActuatorsPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(ActuatorsPicker, 1, 1000),
+  wxSpinCtrl:setRange(ActuatorsPicker, 2, 1000),
   NetworksPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(NetworksPicker, 1, 250),
+  wxSpinCtrl:setRange(NetworksPicker, 2, 250),
   ButtonPicker = wxButton:new(Panel, 10, [{label, "press to start"}]),
   Log = wxTextCtrl:new(Panel, 7, [{value, "insert initial values for networs please :) "},
     {style, ?wxDEFAULT}]),
@@ -66,6 +68,8 @@ initiation(_Mode,_Node,Pid) ->
 
   wxFrame:connect(Parent,close_window), %connect between closing the window and the handler
   wxButton:connect(ButtonPicker,command_button_clicked), %connect between start click and the handler
+
+
 
   %% Add to sizer
   PickerOptions = [{border, 1},{flag, ?wxALL bor ?wxEXPAND}],
@@ -123,7 +127,8 @@ initiation(_Mode,_Node,Pid) ->
 
 
 %%handle 'start' event
-handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
+handle_event(#wx{obj = _Button,
+  event = #wxCommand{type = command_button_clicked}},
     State = #state{
       activation_function=Choice,
       neurons=NeuronsP,
@@ -137,10 +142,13 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       button = B,
       main_pid = Pid,
       node = Node,
-      clicked=Click}) ->
+      clicked=Click,
+      flag=run}) ->
       L3=string:split(wxTextCtrl:getValue(Node),",",all),
       Nodes_List=[list_to_atom(A)||A<-L3],
-      Nodes_List2_for_dibug = ['nonode@nohost'],  %todo delete thid
+      Nodes_List2_for_dibug = [node()],  %todo delete thid
+
+
   if
 
           Click=:=0 -> %check if the previous run was completed and the file is valid
@@ -162,19 +170,23 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
             true -> AF2 = AF
           end,
           %io:format("i'm in the start gui case ~n ",[]),
-          A=gen_server:cast(Pid,{start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List2_for_dibug}),%todo change to nodes list
+          A=gen_server:cast(Pid,{start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List}),%todo change to nodes list
    %      {Pimaind ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
          Click2 = 1 ,
-            wxButton:setLabel(B,"building nn"),
+            wxButton:setLabel(B,"building neural network"),
+            wxButton:disable(B),
             wxPanel:refresh(Parent); %refresh the panel
+
     true ->
       Flag2 = stop,
       gen_server:cast(Pid,{stop}),
       Click2 = 0 ,
       terminating_func(3,Parent,B),
-      wxButton:setLabel(B,"start"),
+      wxButton:setLabel(B,"please wait"),
+      wxTextCtrl:changeValue(Log, "closing simulation"),
+
       wxTextCtrl:changeValue(Log, "you can start again with different values"),
       wxPanel:refresh(Parent) %refresh the panel
   end,
@@ -205,45 +217,62 @@ handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply,Reply,State}.
 
+
+
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
   if
       Flag =:= run ->
       {Fitness,Result,G} = Outputs,
+
       Result1=shortcut(Result,[]),
         try
-        toGraph:generateGraph(G)
+        toGraph:generateGraph(G) of
+          _No_error->       toGraph:replaceImage(State#state.pic_panel),
+            %wxTextCtrl:changeValue(Log, ""), %clean the log
+            wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
+            wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
+            %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
+            wxTextCtrl:changeValue(Log,"network in simulation"),
+            wxButton:setLabel(B,"press to terminate network"),
+            wxButton:enable(B),
+            wxPanel:refresh(Frame), %refresh the panel
+            wxPanel:refresh(FitTXT),
+            wxPanel:refresh(ResultTxT)
         catch
-          _Reason->
-                     io:format(" the failed reason is : ~p, ~n", [_Reason])
-        end,
+          _Reason:_Reason1-> ok
 
-      toGraph:replaceImage(State#state.pic_panel),
-        %wxTextCtrl:changeValue(Log, ""), %clean the log
-        wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
-        wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
-        %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
-        wxTextCtrl:changeValue(Log,"network in simulation"),
-        wxButton:setLabel(B,"press to terminate network"),
-       wxPanel:refresh(Frame), %refresh the panel
-       wxPanel:refresh(FitTXT),
-        wxPanel:refresh(ResultTxT);
-      true ->
-        L=deleteResults([])
+        end;
+        true ->
+           L=deleteResults([])
+
   end,
 
   {noreply,State#state{}};
 
-handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
-  {Fitness,Result,G} = Outputs,
-  Result1=shortcut(Result,[]),
-  wxTextCtrl:changeValue(Log, ""), %clean the log
+%%handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
+%%  {Fitness,Result,G} = Outputs,
+%%  Result1=shortcut(Result,[]),
+%%  wxTextCtrl:changeValue(Log, ""), %clean the log
+%%  wxTextCtrl:changeValue(Log, "you can start again with different values"),
+%%  wxPanel:refresh(Frame), %refresh the panel
+%%  run3(W),
+%%  {Pid ! {terminate}},
+%%  {noreply,State#state{clicked=0}};
+
+
+
+handle_cast({finish_terminate}, State = #state{
+
+  log=Log,
+  frame=Parent,
+  panel=_Panel,
+  button = B,
+  flag=stop}) ->
+  wxButton:setLabel(B,"start"),
   wxTextCtrl:changeValue(Log, "you can start again with different values"),
-  wxPanel:refresh(Frame), %refresh the panel
+  wxPanel:refresh(Parent), %refresh the panel
 
-  run3(W),
-  {Pid ! {terminate}},
-  {noreply,State#state{clicked=0}};
-
+  {noreply,State#state{flag=run}};
 
 
 handle_cast(_Msg, State) ->
@@ -336,7 +365,7 @@ shortcut([H|T],L)->
       shortcut(T,L2) ;
     true ->
       H_Float= float(H),
-      L2= L ++ [float_to_list(H_Float,[{decimals,4}])],
+      L2= L ++ [list_to_float(float_to_list(H_Float,[{decimals,4}]))],
       shortcut(T,L2)
   end.
 

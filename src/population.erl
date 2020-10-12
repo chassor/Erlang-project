@@ -15,6 +15,8 @@
 
 -record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs}).
 
+
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -35,7 +37,8 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
-  process_flag(trap_exit, true),
+ % process_flag(trap_exit, true),
+ Y2= global:register_name(ID,self()),
  io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,
@@ -50,10 +53,11 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     finesses_Map = maps:new()},
   Map=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),State),
   Map2= received_graphs(Map,maps:to_list(Map)),
+  io:format(" finish_initilize node" , []),
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
 idle(cast,{start_insert},State = #population_state{id = Id})->
-  io:format("pop: im in ~p idle state ~n" ,[Id]),
+%  io:format("pop: im in ~p idle state ~n" ,[Id]),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
@@ -90,13 +94,19 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
-  io:format("pop: im in node1 network_in_computation state ~n"),
+  io:format("pop: im in node network_in_computation state ~n"),
 Fitness = std_fitness(NN_Result),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
+ % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
+ % io:format("MAP2 =~p ~n",[maps:keys(State#population_state.nn_pids_map2)]),
+  %io:format("KEY =~p ~n",[KEY]),
+ % io:format("countermap =~p ~n",[Counter]),
   Size = maps:size(Counter),
+ % io:format("pop: im in node1 mapSize =~p ~n",[Size]),
   if
      Size =:= 0 ->
+   %    io:format("pop: im in node mapSize =0 ~n"),
       MAP=State#population_state.nn_pids_map,
       R = split_nn(UpdateFitnessMap),
       BestNN  = element(1,R),
@@ -109,7 +119,9 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       MangerPid=State#population_state.main_PID,
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
       %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
+  %     io:format("going to cast master ~n"),
       Answer=gen_server:cast({global,master},{Id,new_gen_hit_me,Result_for_master}),
+  %     io:format("casted result to master ~n"),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
@@ -166,7 +178,8 @@ handle_event(_EventType, _EventContent, _StateName, State = #population_state{})
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, _StateName, _State = #population_state{nn_pids_map = Map }) ->
+terminate(Reason, StateName, _State = #population_state{nn_pids_map = Map }) ->
+  io:format("node terminate ~p ~p ~n",[Reason,StateName]),
   L = maps:to_list(Map),
   [ gen_statem:stop(PID)  || {_KEY,{PID,_G}} <- L],
    ok.
