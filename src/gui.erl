@@ -239,7 +239,7 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
             wxPanel:refresh(FitTXT),
             wxPanel:refresh(ResultTxT)
         catch
-          _Reason:_Reason1-> ok
+          _Reason:_Reason1-> io:format("gui catched error")
 
         end;
         true ->

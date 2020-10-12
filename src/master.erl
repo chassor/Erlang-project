@@ -98,16 +98,19 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
   A=insert_cast(maps:to_list(Map)),
   {noreply, State#master_state{nodes_Map = Map ,highestScore = 1000000000}};
 
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score}) ->
+handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score,nodes_Map =NodesMap}) ->
   {NewScore,_,_} = Result,
+  io:format("master got result"),
   if
     NewScore < Score ->
       Score2 = NewScore,
       timer:sleep(2000),
+      io:format("send result to gui"),
       gen_statem:cast(gui_nn,{done,Result}) ;
     true -> Score2 = Score
   end,
-  gen_statem:cast({global,Pop_name},{start_insert}),
+  {_nodemap,Pid}=maps:get(Pop_name,NodesMap),
+  gen_statem:cast(Pid,{start_insert}),
   {noreply, State#master_state{highestScore = Score2}};
 
 handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
@@ -198,8 +201,9 @@ trytoconnect([H|T]) ->
   end.
 
 insert_cast([])->ok;
-insert_cast([{KEY,_V}|T]) ->
-  Answer=gen_statem:cast({global,KEY},{start_insert}),
+insert_cast([{KEY, {_Node,PID}}|T]) ->
+  io:format("Start insert to {global,~p}",[KEY]),
+  Answer=gen_statem:cast(PID,{start_insert}),
   insert_cast(T).
 
 
@@ -215,7 +219,7 @@ stopProcess([{Name,{_Node,Pid}}|T])->
   X=is_process_alive(Pid),
   if
     X=:=true->
-      gen_statem:stop({global,Name}),
+      gen_statem:stop(Pid),
       stopProcess(T);
     true->stopProcess(T)
 

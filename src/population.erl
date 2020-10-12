@@ -53,19 +53,10 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     finesses_Map = maps:new()},
   Map=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),State),
   Map2= received_graphs(Map,maps:to_list(Map)),
-  io:format(" finish_initilize node" , []),
+  io:format(" finish_initilize node~n" , []),
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
-idle(cast,{start_insert},State = #population_state{id = Id})->
-%  io:format("pop: im in ~p idle state ~n" ,[Id]),
-  Map=State#population_state.nn_pids_map,
-  Inputs=State#population_state.inputs,
-  insert_inputs(maps:to_list(Map),Inputs),
-  NextStateName = network_in_computation,
-  {next_state, NextStateName, State};
 
-idle(EventType, EventContent, Data) ->
-  handle_common(EventType, EventContent, Data,idle).
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
@@ -92,8 +83,21 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
   {next_state, NextStateName, State}.
 
 
+idle(cast,{start_insert},State = #population_state{id = Id})->
+  io:format("pop: im in ~p idle state ~n" ,[Id]),
+  Map=State#population_state.nn_pids_map,
+  Inputs=State#population_state.inputs,
+  insert_inputs(maps:to_list(Map),Inputs),
+  NextStateName = network_in_computation,
+  {next_state, NextStateName, State};
 
-network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
+idle(EventType, EventContent, Data) ->
+  io:format("idle handle common node1 ~n"),
+  handle_common(EventType, EventContent, Data,idle).
+
+
+
+network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id,main_PID = MainPid})->
   io:format("pop: im in node network_in_computation state ~n"),
 Fitness = std_fitness(NN_Result),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
@@ -120,7 +124,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
       %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
   %     io:format("going to cast master ~n"),
-      Answer=gen_server:cast({global,master},{Id,new_gen_hit_me,Result_for_master}),
+      Answer=gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master}),
   %     io:format("casted result to master ~n"),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
@@ -130,6 +134,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
 
 
 network_in_computation(EventType, EventContent, Data) ->
+  io:format("network_in_computation handle common node1 ~n"),
   handle_common(EventType, EventContent, Data,network_in_computation).
 
 create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
@@ -151,18 +156,22 @@ create_new_generation(EventType, EventContent, Data) ->
 
 
 handle_common(info, {'EXIT',PID,normal},State = #population_state{},CuRR_State) ->
+  io:format("{'EXIT',PID,normal} handle common node1 ~n"),
    {keep_state, State};
 
 handle_common(info, {'EXIT',PID,_Reason},State = #population_state{},CuRR_State) ->
+  io:format("{'EXIT',PID,_Reason} handle common node1 ~n"),
   {keep_state, State}
 ;
 
 
 
 handle_common(info,_,State = #population_state{},_State) ->
+  io:format("info,_,State = #population_state{},_State handle common node1 ~n"),
   {keep_state, State};
 
 handle_common(_,_,State = #population_state{},_State) ->
+  io:format("_,_,State = #population_state{},_State handle common node1 ~n"),
   {keep_state, State}.
 
 %% @private
@@ -179,7 +188,7 @@ handle_event(_EventType, _EventContent, _StateName, State = #population_state{})
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
 terminate(Reason, StateName, _State = #population_state{nn_pids_map = Map }) ->
-  io:format("node terminate ~p ~p ~n",[Reason,StateName]),
+  io:format("node1 terminate ~p ~p ~n",[Reason,StateName]),
   L = maps:to_list(Map),
   [ gen_statem:stop(PID)  || {_KEY,{PID,_G}} <- L],
    ok.
