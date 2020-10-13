@@ -45,7 +45,7 @@ initiation(_Mode,_Node,Pid) ->
     [{label, " start Neuroevolution calculation"}]),
   LogSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "log"}]),
-  Nodes  = wxTextCtrl:new(Panel, 5, [{value, ""},
+  Nodes  = wxTextCtrl:new(Panel, 5, [{value, "node1@hananel-virtual-machine"},
     {style, ?wxDEFAULT}]),
 
 

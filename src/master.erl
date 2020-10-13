@@ -91,7 +91,8 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%handle_cast(_Request, State = #master_state{}) ->
 %%  {noreply, State};
 
-handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{highestScore = H}) ->
+handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
+  H=10000000000,
   io:format("master:im in the master start pops ~n"),
   Num_of_live = num_of_alive_processes(),
   Inputs = generate_inputs(Sensors,[]),
@@ -114,10 +115,10 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       io:format("~p ~n",[A])
   end,
 
-  {noreply, State#master_state{nodes_Map = MapE }};
+  {noreply, State#master_state{nodes_Map = MapE, highestScore = H}};
 
 handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes}) ->
-  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
+%%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
   {NewScore,_,_,_} = Result,
   if
     NewScore < Score ->
@@ -173,7 +174,7 @@ handle_info(_Info, State = #master_state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #master_state{}) -> term()).
 terminate(Reason, State = #master_state{}) ->
-  io:format("node terminate ~p ~p ~n",[Reason,State]),
+  io:format("master terminate ~p ~p ~n",[Reason,State]),
   ok.
 
 %% @private
@@ -248,16 +249,20 @@ num_of_alive_processes() ->
   L=length(L7),
   L.
 
+
+
+
 stopProcess([])->ok;
-stopProcess([{Name,{_Node,Pid}}|T])->
-  X=is_process_alive(Pid),
-  if
-    X=:=true->
-      gen_statem:stop(Pid),
-      stopProcess(T);
-    true->stopProcess(T)
+stopProcess([{_Name,{_Node,Pid}}|T])->
+
+  try
+    gen_statem:stop(Pid) of
+    _Result->stopProcess(T)
+  catch
+    _Reason:_Reason1->stopProcess(T)
 
   end.
+
 
 deleteResults(L)->
   receive

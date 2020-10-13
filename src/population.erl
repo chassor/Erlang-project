@@ -94,6 +94,8 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map})->
   io:format("pop: im in node1 network_in_computation state ~n"),
+
+  io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
 Fitness = std_fitness(NN_Result),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -119,7 +121,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
        {Map3,Gmap2} = create_NN_Agents_M(Map2,BestNN,Gmap,State),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
-      FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
+      FitnessMap3=update_fitness_map(UpdateFitnessMap,WorstNN),
       %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
   %     io:format("going to cast master ~n"),
        if
@@ -133,9 +135,9 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
 
   %     io:format("casted result to master ~n"),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
-      {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
+      {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap3,generation_Map = Gmap2}};
 
-      true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter,generation_Map = Gmap2 }}
+      true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
   end;
 
 
@@ -267,8 +269,8 @@ split_nn(FitnessMAp)->
       Return.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
-      {_Key1,{Val1,_Result1,_}} = A,
-      {_Key2,{Val2,_Result2,_}} = B,
+      {_Key1,{Val1,_Result1}} = A,
+      {_Key2,{Val2,_Result2}} = B,
       if
         Val1<Val2 -> true ;
         true -> false
