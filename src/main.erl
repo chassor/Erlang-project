@@ -3,17 +3,8 @@
 -include_lib("wx/include/wx.hrl").
 run()->
 
- AB=master:start_link(),
-
-
-
-
-
-
-  X2=node(),
-  loop()
-
-  .
+ AB=master:start_link()
+.
 
 loop()->
   timer:sleep(10000),

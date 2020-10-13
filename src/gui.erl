@@ -48,6 +48,8 @@ initiation(_Mode,_Node,Pid) ->
   Nodes  = wxTextCtrl:new(Panel, 5, [{value, ""},
     {style, ?wxDEFAULT}]),
 
+
+
   Choice = wxListBox:new(Panel, 7, [{choices, Choices}]),
   LayersPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(LayersPicker, 2, 1000),
@@ -66,6 +68,8 @@ initiation(_Mode,_Node,Pid) ->
 
   wxFrame:connect(Parent,close_window), %connect between closing the window and the handler
   wxButton:connect(ButtonPicker,command_button_clicked), %connect between start click and the handler
+
+
 
   %% Add to sizer
   PickerOptions = [{border, 1},{flag, ?wxALL bor ?wxEXPAND}],
@@ -141,7 +145,6 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       re_insert_nodes_click = Nodes_Click,
       clicked=Click,
       flag=run}) ->
-
       L3=string:split(wxTextCtrl:getValue(Node),",",all),
       Nodes_List=[list_to_atom(A)||A<-L3],
       Nodes_List2_for_dibug = ['node1@avnido-VirtualBox'],  %todo delete thid
@@ -176,6 +179,7 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
             wxButton:setLabel(B,"building neural network"),
             wxButton:disable(B),
             wxPanel:refresh(Parent); %refresh the panel
+
     true ->
       Flag2 = stop,
       gen_server:cast(Pid,{stop}),
@@ -187,6 +191,7 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       wxTextCtrl:changeValue(Log, "you can start again with different values"),
       wxPanel:refresh(Parent) %refresh the panel
   end,
+
   {noreply, State#state{clicked=Click2 , flag = Flag2}};
 
 
@@ -212,6 +217,8 @@ handle_info(Msg, State) ->
 handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply,Reply,State}.
+
+
 
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
   if
@@ -257,13 +264,16 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
 
 
 handle_cast({finish_terminate}, State = #state{
+
   log=Log,
   frame=Parent,
   panel=_Panel,
-  button = B}) ->
-      wxButton:setLabel(B,"start"),
-      wxTextCtrl:changeValue(Log, "you can start again with different values"),
-      wxPanel:refresh(Parent), %refresh the panel
+  button = B,
+  flag=stop}) ->
+  wxButton:setLabel(B,"start"),
+  wxTextCtrl:changeValue(Log, "you can start again with different values"),
+  wxPanel:refresh(Parent), %refresh the panel
+
   {noreply,State#state{flag=run}};
 
 handle_cast({insert_nodes_again}, State = #state{frame = Parent ,log = Log ,button = B ,node = Nodes }) ->

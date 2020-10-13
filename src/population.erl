@@ -35,7 +35,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
-  %process_flag(trap_exit, true),
+ % process_flag(trap_exit, true),
  Y2= global:register_name(ID,self()),
  io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
   State=#population_state{
@@ -159,18 +159,22 @@ create_new_generation(EventType, EventContent, Data) ->
 
 
 handle_common(info, {'EXIT',PID,normal},State = #population_state{},CuRR_State) ->
+  io:format("{'EXIT',PID,normal} handle common node1 ~n"),
    {keep_state, State};
 
 handle_common(info, {'EXIT',PID,_Reason},State = #population_state{},CuRR_State) ->
+  io:format("{'EXIT',PID,_Reason} handle common node1 ~n"),
   {keep_state, State}
 ;
 
 
 
 handle_common(info,_,State = #population_state{},_State) ->
+  io:format("info,_,State = #population_state{},_State handle common node1 ~n"),
   {keep_state, State};
 
 handle_common(_,_,State = #population_state{},_State) ->
+  io:format("_,_,State = #population_state{},_State handle common node1 ~n"),
   {keep_state, State}.
 
 %% @private

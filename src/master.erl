@@ -43,7 +43,6 @@ start_link() ->
 init([]) ->
   %process_flag(trap_exit, true),
  {_A,_B,_C,D}=gui:start(node(),gui_nn,self()), %---------------> todo change back to this
- % D = gui2:start_link(self()),
   io:format("starting the gui with pid ~p ~n",[D]),
 
   {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000}}.
