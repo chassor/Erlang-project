@@ -101,7 +101,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
 
          PID_manager=State#nn_agent_state.manger_pid,
       ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
-     % PID_manager !{ ,result,ResultList},
+     % PID_manager !{self(),result,ResultList},
      gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList}),
 
       {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};

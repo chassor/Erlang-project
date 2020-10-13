@@ -10,12 +10,12 @@
 -author("chass").
 
 %% API
--export([generateGraph/1, createFrame/0, replaceImage/1]).
+-export([generateGraph/1, createFrame/0, replaceImage/1, getEdgesList/1, getVerticesList/1]).
 -include_lib("wx/include/wx.hrl").
 
-generateGraph(G)->
-  L1=getEdgesList(G),
-  L3=getVerticesList(G),
+generateGraph({Vertices,Edges})->
+  L1=Edges,
+  L3=Vertices,
   Map=creatMapOfNewNames(L3,maps:new(),1),
   L2 = createNodesList(Map,L3,[]),
 

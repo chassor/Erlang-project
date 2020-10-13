@@ -13,7 +13,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs ,highest_score}).
+-record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs ,highest_score,generation_Map}).
 
 %%%===================================================================
 %%% API
@@ -50,10 +50,10 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     af = AF,
     highest_score = 1000000000,
     finesses_Map = maps:new()},
-  Map=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),State),
-  Map2= received_graphs(Map,maps:to_list(Map)),
+  {PIMap,GeMAp}=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),maps:new(),State),
+  Map2= received_graphs(PIMap,maps:to_list(PIMap)),
   io:format(" finish_initilize node ~n" , []),
-  {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
+  {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2 , generation_Map = GeMAp}}.
 
 idle(cast,{start_insert,Highest_score},State = #population_state{id = Id})->
   io:format("pop: im in ~p idle state ~n" ,[Id]),
@@ -92,10 +92,10 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 
-network_in_computation(cast,{KEY,result,NN_Result,Generation},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap})->
+network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map})->
   io:format("pop: im in node1 network_in_computation state ~n"),
 Fitness = std_fitness(NN_Result),
-UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result,Generation},FitnessMap),
+UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
  % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
  % io:format("MAP2 =~p ~n",[maps:keys(State#population_state.nn_pids_map2)]),
@@ -110,11 +110,13 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result,Generation},FitnessMap),
       R = split_nn(UpdateFitnessMap),
       BestNN  = element(1,R),
       WorstNN = element(2,R),
-      {_Pid,G} = maps:get(element(3,R),MAP),
+      {_Pid,G2} = maps:get(element(3,R),MAP),
+       G={toGraph:getVerticesList(G2),toGraph:getEdgesList(G2)},
        Best_Fitness_of_this_iteration = element(4,R),
+       Generation = maps:get(KEY,Generation_map),
       Result_for_master = {Best_Fitness_of_this_iteration,element(5,R),G,Generation},
-      Map2=terminate_worst_nn(WorstNN,MAP),
-      Map3 = create_NN_Agents_M(Map2,BestNN,State),
+       {Map2,Gmap}=terminate_worst_nn(WorstNN,MAP,Generation_map),
+       {Map3,Gmap2} = create_NN_Agents_M(Map2,BestNN,Gmap,State),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
@@ -133,7 +135,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result,Generation},FitnessMap),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
 
-      true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter }}
+      true -> {keep_state,State#population_state{finesses_Map = UpdateFitnessMap , nn_pids_map2 = Counter,generation_Map = Gmap2 }}
   end;
 
 
@@ -213,17 +215,18 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
 
 
 
-create_NN_Agents(0,Map,_)->Map;
-create_NN_Agents(N,Map,S)->
+create_NN_Agents(0,Map,Gmap,_)->{Map,Gmap};
+create_NN_Agents(N,Map,Gmap,S)->
   io:format("pop:create_NN_Agents ~n"),
   Key = genarateIdfromAtom(),
   PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,
     S#population_state.numOfNeuronsEachLayer,self(),Key,new),
   Map2 = maps:put(Key,{PID,undefined},Map),
-  create_NN_Agents(N-1,Map2,S).
+  Gmap2 = maps:put (Key,1,Gmap),
+  create_NN_Agents(N-1,Map2,Gmap2,S).
 
-create_NN_Agents_M(M,[],_)->M;
-create_NN_Agents_M(M,[H|T],S)->
+create_NN_Agents_M(M,[],Gmap,_)->{M,Gmap};
+create_NN_Agents_M(M,[H|T],Gmap,S)->
   NewKey = genarateIdfromAtom(),
   Key=element(1,H),
   G = element(2,maps:get(Key,M)),
@@ -232,22 +235,25 @@ create_NN_Agents_M(M,[H|T],S)->
   NewG = gen_statem:call(PID,{self(),get_graph}),
    gen_statem:call(PID,{self(),mutate}),
   Map2 = maps:put(NewKey,{PID,NewG},M),
-  create_NN_Agents_M(Map2,T,S).
+  Generation = maps:get(Key,Gmap) +1,
+  Gmap2 = maps:put(NewKey,Generation,Gmap),
+  create_NN_Agents_M(Map2,T,Gmap2,S).
 
 
 
 
 
-terminate_worst_nn([],Map)->Map;
+terminate_worst_nn([],Map,Gmap)->{Map,Gmap};
 
-terminate_worst_nn([H|T],Map)->
+terminate_worst_nn([H|T],Map,Gmap)->
   {KEY,_}=H,
   PID=element(1,maps:get(KEY,Map)),
  % G = element(2,maps:get(KEY,Map)),
  % digraph:delete(G),
   gen_statem:stop(PID),
   Map2=maps:remove(KEY,Map),
-  terminate_worst_nn(T,Map2).
+  Gmap2=maps:remove(KEY,Gmap),
+  terminate_worst_nn(T,Map2,Gmap2).
 
 
 
