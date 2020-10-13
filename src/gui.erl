@@ -4,7 +4,7 @@
 -export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT}).
+-record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT ,re_insert_nodes_click}).
 
 start(Node,Name,Pid) ->
   wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
@@ -48,8 +48,6 @@ initiation(_Mode,_Node,Pid) ->
   Nodes  = wxTextCtrl:new(Panel, 5, [{value, ""},
     {style, ?wxDEFAULT}]),
 
-
-
   Choice = wxListBox:new(Panel, 7, [{choices, Choices}]),
   LayersPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(LayersPicker, 2, 1000),
@@ -68,8 +66,6 @@ initiation(_Mode,_Node,Pid) ->
 
   wxFrame:connect(Parent,close_window), %connect between closing the window and the handler
   wxButton:connect(ButtonPicker,command_button_clicked), %connect between start click and the handler
-
-
 
   %% Add to sizer
   PickerOptions = [{border, 1},{flag, ?wxALL bor ?wxEXPAND}],
@@ -105,6 +101,7 @@ initiation(_Mode,_Node,Pid) ->
      State = #state{
        clicked=0,
        flag = run,
+       re_insert_nodes_click = false,
        activation_function=Choice,
        neurons=NeuronsPicker,
        layers=LayersPicker,
@@ -127,8 +124,7 @@ initiation(_Mode,_Node,Pid) ->
 
 
 %%handle 'start' event
-handle_event(#wx{obj = _Button,
-  event = #wxCommand{type = command_button_clicked}},
+handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
     State = #state{
       activation_function=Choice,
       neurons=NeuronsP,
@@ -142,11 +138,13 @@ handle_event(#wx{obj = _Button,
       button = B,
       main_pid = Pid,
       node = Node,
+      re_insert_nodes_click = Nodes_Click,
       clicked=Click,
       flag=run}) ->
+
       L3=string:split(wxTextCtrl:getValue(Node),",",all),
       Nodes_List=[list_to_atom(A)||A<-L3],
-      Nodes_List2_for_dibug = [node()],  %todo delete thid
+      Nodes_List2_for_dibug = ['node1@avnido-VirtualBox'],  %todo delete thid
 
 
   if
@@ -178,7 +176,6 @@ handle_event(#wx{obj = _Button,
             wxButton:setLabel(B,"building neural network"),
             wxButton:disable(B),
             wxPanel:refresh(Parent); %refresh the panel
-
     true ->
       Flag2 = stop,
       gen_server:cast(Pid,{stop}),
@@ -190,7 +187,6 @@ handle_event(#wx{obj = _Button,
       wxTextCtrl:changeValue(Log, "you can start again with different values"),
       wxPanel:refresh(Parent) %refresh the panel
   end,
-
   {noreply, State#state{clicked=Click2 , flag = Flag2}};
 
 
@@ -217,13 +213,10 @@ handle_call(_Request, _From, State) ->
   Reply = ok,
   {reply,Reply,State}.
 
-
-
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
   if
       Flag =:= run ->
-      {Fitness,Result,G} = Outputs,
-
+      {Fitness,Result,G,Generation} = Outputs,
       Result1=shortcut(Result,[]),
         try
         toGraph:generateGraph(G) of
@@ -231,22 +224,24 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
             %wxTextCtrl:changeValue(Log, ""), %clean the log
             wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
+            wxTextCtrl:changeValue(GenTxT, lists:flatten(io_lib:format("~p", [Generation]))),
             %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(Log,"network in simulation"),
             wxButton:setLabel(B,"press to terminate network"),
             wxButton:enable(B),
             wxPanel:refresh(Frame), %refresh the panel
             wxPanel:refresh(FitTXT),
-            wxPanel:refresh(ResultTxT)
+            wxPanel:refresh(ResultTxT),
+            wxPanel:refresh(GenTxT)
         catch
-          _Reason:_Reason1-> ok
+          _Reason:_Reason1-> io:format("gui: error get to G because he located in another node ~n but the Fitness is ~p , and network generation is ~p ~n",[Fitness,Generation])
 
         end;
         true ->
            L=deleteResults([])
 
   end,
-
+  io:format("gui: end of done state in gui with fitness ~p~n",[element(1,Outputs)]),
   {noreply,State#state{}};
 
 %%handle_cast({result,Outputs} ,State = #state{frame = Frame,log = Log,main_pid = Pid,image = W}) ->
@@ -262,17 +257,23 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
 
 
 handle_cast({finish_terminate}, State = #state{
-
   log=Log,
   frame=Parent,
   panel=_Panel,
-  button = B,
-  flag=stop}) ->
-  wxButton:setLabel(B,"start"),
-  wxTextCtrl:changeValue(Log, "you can start again with different values"),
-  wxPanel:refresh(Parent), %refresh the panel
-
+  button = B}) ->
+      wxButton:setLabel(B,"start"),
+      wxTextCtrl:changeValue(Log, "you can start again with different values"),
+      wxPanel:refresh(Parent), %refresh the panel
   {noreply,State#state{flag=run}};
+
+handle_cast({insert_nodes_again}, State = #state{frame = Parent ,log = Log ,button = B ,node = Nodes }) ->
+  wxTextCtrl:changeValue(Log,"wrong connection to nodes please open new termials and try again"),
+  wxTextCtrl:changeValue(Nodes,""),
+  wxButton:enable(B),
+  wxButton:setLabel(B,"press to insert new nodes"),
+  wxTextCtrl:changeValue(Nodes,""),
+  wxPanel:refresh(Parent), %refresh the panel ;;
+  {noreply,State#state{clicked =0,flag=run}};
 
 
 handle_cast(_Msg, State) ->

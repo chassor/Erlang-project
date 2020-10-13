@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,input_list,results}).
+-record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,input_list,results,generation}).
 
 %%%===================================================================
 %%% API
@@ -49,7 +49,7 @@ init({SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,ManagerPid,Id,G2})
   end
   ,
   {ok, idle, #nn_agent_state{manger_pid = ManagerPid,id = Id,graph = G,results = maps:new()
-    ,sensor_list = SensorList,actuator_list = maps:from_list(ActList),actuator_list2 = maps:from_list(ActList) }}.
+    ,sensor_list = SensorList,actuator_list = maps:from_list(ActList),actuator_list2 = maps:from_list(ActList) ,generation = 0 }}.
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
@@ -75,10 +75,10 @@ state_name(_EventType, _EventContent, State = #nn_agent_state{}) ->
   {next_state, NextStateName, State}.
 
 
-idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{}) ->
+idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{generation = Generation}) ->
   sendInput(InputList,State#nn_agent_state.sensor_list),
   NextStateName = wait_for_result,
-  {next_state, NextStateName, State#nn_agent_state{input_list = InputList}};
+  {next_state, NextStateName, State#nn_agent_state{input_list = InputList , generation = Generation +1 }};
 
 
 
@@ -88,7 +88,7 @@ idle(EventType, EventContent, Data) ->
   A=handle_common(EventType, EventContent, Data,idle),
 A.
 
-wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
+wait_for_result(cast, {From,result,Result},State = #nn_agent_state{generation = Generation}) ->
   Act_PIds=State#nn_agent_state.actuator_list2,
   {_,ID}=maps:get(From,Act_PIds),
   ResultsMap2=State#nn_agent_state.results,
@@ -102,7 +102,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
          PID_manager=State#nn_agent_state.manger_pid,
       ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
      % PID_manager !{self(),result,ResultList},
-     gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList}),
+     gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList,Generation}),
 
       {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
     false->{keep_state,State#nn_agent_state{actuator_list2 = Map2,results = ResultsMap}}

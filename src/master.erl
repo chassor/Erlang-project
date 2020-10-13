@@ -41,10 +41,12 @@ start_link() ->
   {ok, State :: #master_state{}} | {ok, State :: #master_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
-  process_flag(trap_exit, true),
-  {_A,_B,_C,D}=gui:start(node(),gui_nn,self()),
+  %process_flag(trap_exit, true),
+ {_A,_B,_C,D}=gui:start(node(),gui_nn,self()), %---------------> todo change back to this
+ % D = gui2:start_link(self()),
+  io:format("starting the gui with pid ~p ~n",[D]),
 
-  {ok, #master_state{guiName =gui_nn,guiPid = D }}.
+  {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000}}.
 
 %% @private
 %% @doc Handling call messages
@@ -62,10 +64,10 @@ init([]) ->
 
 
 
-handle_call({init,Sensors ,Actuators ,Layers,  Neurons ,AF ,NN , Nodes},From, State = #master_state{}) ->
-  Inputs = generate_inputs(Sensors,[]),
-  Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF,NN,Inputs),
-  {reply, ok, State#master_state{nodes_Map = Map}};
+%%handle_call({init,Sensors ,Actuators ,Layers,  Neurons ,AF ,NN , Nodes},From, State = #master_state{}) ->
+%%  Inputs = generate_inputs(Sensors,[]),
+%%  Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF,NN,Inputs),
+%%  {reply, ok, State#master_state{nodes_Map = Map}};
 
 
 
@@ -90,31 +92,61 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%handle_cast(_Request, State = #master_state{}) ->
 %%  {noreply, State};
 
-handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
+handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{highestScore = H}) ->
+  io:format("master:im in the master start pops ~n"),
   Num_of_live = num_of_alive_processes(),
   Inputs = generate_inputs(Sensors,[]),
-  %trytoconnect(Nodes)  ---- for terminal
-  Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
-  A=insert_cast(maps:to_list(Map)),
-  {noreply, State#master_state{nodes_Map = Map ,highestScore = 1000000000}};
+  trytoconnect(Nodes) , %---- for terminal
+  {Map,OK} = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
+  S=maps:size(Map),
+  if
+    OK =:= error ->
+      MapE=maps:new(),
+      if
+        S =:= 0  -> wx_object:cast(gui_nn,{insert_nodes_again}) ;
+        true ->
+          L = maps:to_list(Map),
+          stopProcess(L),
+          wx_object:cast(gui_nn,{insert_nodes_again})
+      end;
+    true ->
+      MapE = Map ,
+      A=insert_cast(maps:to_list(Map),H),
+      io:format("~p ~n",[A])
+  end,
 
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score}) ->
-  {NewScore,_,_} = Result,
+  {noreply, State#master_state{nodes_Map = MapE }};
+
+handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes}) ->
+  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
+  {NewScore,_,_,_} = Result,
   if
     NewScore < Score ->
       Score2 = NewScore,
       timer:sleep(2000),
-      gen_statem:cast(gui_nn,{done,Result}) ;
+      wx_object:cast(gui_nn,{done,Result}) ;
+      %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
   end,
-  gen_statem:cast({global,Pop_name},{start_insert}),
+  {_Node,Pid} = maps:get(Pop_name,Nodes),
+  io:format("master:in start_insert massage to: ~p with best score: ~p ~n" ,[Pop_name,Score2]),
+  gen_statem:cast(Pid,{start_insert,Score2}),
   {noreply, State#master_state{highestScore = Score2}};
 
+handle_cast({Pop_name,worst_result}, State = #master_state{nodes_Map = Nodes ,highestScore = H}) ->
+io:format("master:in in worst_result cast from ~p ,start new iteration!! ~n" ,[Pop_name]),
+{_Node,Pid} = maps:get(Pop_name,Nodes),
+gen_statem:cast(Pid,{start_insert,H}),
+{noreply, State#master_state{}};
+
+
+
 handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
+  io:format("master:im in handle stop "),
   Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
   stopProcess(L),
-  gen_statem:cast(gui_nn,{finish_terminate}),
+  wx_object:cast(gui_nn,{finish_terminate}),
   {noreply, State#master_state{highestScore = -10000000000000}}.
 
 
@@ -141,7 +173,8 @@ handle_info(_Info, State = #master_state{}) ->
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #master_state{}) -> term()).
-terminate(_Reason, _State = #master_state{}) ->
+terminate(Reason, State = #master_state{}) ->
+  io:format("node terminate ~p ~p ~n",[Reason,State]),
   ok.
 
 %% @private
@@ -156,17 +189,19 @@ code_change(_OldVsn, State = #master_state{}, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-startChat([],Map,_,_,_,_,_,_,_,_) -> Map;
+startChat([],Map,_,_,_,_,_,_,_,_) -> {Map,ok};
 
 startChat([Address|T],Map,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
   N = maps:size(Map)+1,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [N]))),
      Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
+      io:format("master:rpc sent answer: ~p ~n" ,[Answer]),
       if
         is_pid(Answer)->
           M2 = maps:put(PopulationID,{Address,Answer},Map),
           startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
-        true ->  io:format("wrong rpc cast to population")
+         true ->  io:format("wrong rpc cast to node ~p",[Address]),
+           {Map,error}
       end.
 
 
@@ -189,18 +224,22 @@ random_input()->
     2-> Y=-1*X
   end,
   Y.
-trytoconnect([])->ok;
+trytoconnect([])-> ok,io:format("master good connections to nodes ~n");
 trytoconnect([H|T]) ->
  A =net_kernel:connect_node(H),
   if
     A =:= true -> trytoconnect(T)  ;
-    true ->  io:format(" connection mistake")
+    true ->  io:format(" connection mistake ~n")
   end.
 
-insert_cast([])->ok;
-insert_cast([{KEY,_V}|T]) ->
-  Answer=gen_statem:cast({global,KEY},{start_insert}),
-  insert_cast(T).
+insert_cast([],_)->ok;
+insert_cast([{KEY,{_Node,Pid}}|T], Highest_score) ->
+  io:format("master:start insert from master to ~p ~n" , [KEY]),
+  Answer=gen_statem:cast(Pid,{start_insert,Highest_score}),
+  %'node1@avnido-VirtualBox'
+  %Answer=gen_statem:cast({global,KEY},{start_insert}),
+  io:format("master :cast to pop start insert to ~p , Answer is : ~p ~n" , [KEY,Answer]),
+  insert_cast(T,Highest_score).
 
 
 num_of_alive_processes() ->
@@ -215,7 +254,7 @@ stopProcess([{Name,{_Node,Pid}}|T])->
   X=is_process_alive(Pid),
   if
     X=:=true->
-      gen_statem:stop({global,Name}),
+      gen_statem:stop(Pid),
       stopProcess(T);
     true->stopProcess(T)
 

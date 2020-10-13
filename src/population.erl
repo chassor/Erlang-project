@@ -13,9 +13,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs}).
-
-
+-record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs ,highest_score}).
 
 %%%===================================================================
 %%% API
@@ -37,7 +35,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
- % process_flag(trap_exit, true),
+  %process_flag(trap_exit, true),
  Y2= global:register_name(ID,self()),
  io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
   State=#population_state{
@@ -50,19 +48,20 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     numOfNeuronsEachLayer = NumOfNeuronsEachLayer,
     sensorNum = SensorNum,
     af = AF,
+    highest_score = 1000000000,
     finesses_Map = maps:new()},
   Map=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),State),
   Map2= received_graphs(Map,maps:to_list(Map)),
-  io:format(" finish_initilize node" , []),
+  io:format(" finish_initilize node ~n" , []),
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2}}.
 
-idle(cast,{start_insert},State = #population_state{id = Id})->
-%  io:format("pop: im in ~p idle state ~n" ,[Id]),
+idle(cast,{start_insert,Highest_score},State = #population_state{id = Id})->
+  io:format("pop: im in ~p idle state ~n" ,[Id]),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
   NextStateName = network_in_computation,
-  {next_state, NextStateName, State};
+  {next_state, NextStateName, State#population_state{highest_score = Highest_score}};
 
 idle(EventType, EventContent, Data) ->
   handle_common(EventType, EventContent, Data,idle).
@@ -93,10 +92,10 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 
-network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id})->
-  io:format("pop: im in node network_in_computation state ~n"),
+network_in_computation(cast,{KEY,result,NN_Result,Generation},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap})->
+  io:format("pop: im in node1 network_in_computation state ~n"),
 Fitness = std_fitness(NN_Result),
-UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.finesses_Map),
+UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result,Generation},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
  % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
  % io:format("MAP2 =~p ~n",[maps:keys(State#population_state.nn_pids_map2)]),
@@ -112,7 +111,8 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       BestNN  = element(1,R),
       WorstNN = element(2,R),
       {_Pid,G} = maps:get(element(3,R),MAP),
-      Result_for_master = {element(4,R),element(5,R),G},
+       Best_Fitness_of_this_iteration = element(4,R),
+      Result_for_master = {Best_Fitness_of_this_iteration,element(5,R),G,Generation},
       Map2=terminate_worst_nn(WorstNN,MAP),
       Map3 = create_NN_Agents_M(Map2,BestNN,State),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
@@ -120,7 +120,15 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},State#population_state.fines
       FitnessMap=update_fitness_map(UpdateFitnessMap,WorstNN),
       %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
   %     io:format("going to cast master ~n"),
-      Answer=gen_server:cast({global,master},{Id,new_gen_hit_me,Result_for_master}),
+       if
+         Best_Fitness_of_this_iteration < Score ->
+          gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master}) ;
+           true ->
+             io:format(" best score is: ~p ,get low score : ~p so  pop dont sending to master result! ~n",[Score,Best_Fitness_of_this_iteration]),
+             gen_server:cast(MainPid,{Id,worst_result})
+
+       end,
+
   %     io:format("casted result to master ~n"),
       %State#population_state.main_PID ! {cast_me , Map3}, % for check
       {next_state,idle,State#population_state{nn_pids_map = Map3, nn_pids_map2 = Map3 , finesses_Map = FitnessMap}};
@@ -249,8 +257,8 @@ split_nn(FitnessMAp)->
       Return.
 
     minn(A,B) when is_tuple(A) and is_tuple(B)->
-      {_Key1,{Val1,_Result1}} = A,
-      {_Key2,{Val2,_Result2}} = B,
+      {_Key1,{Val1,_Result1,_}} = A,
+      {_Key2,{Val2,_Result2,_}} = B,
       if
         Val1<Val2 -> true ;
         true -> false
