@@ -128,6 +128,10 @@ initiation(_Mode,_Node,Pid) ->
 
 
 %%handle 'start' event
+
+
+
+
 handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
     State = #state{
       activation_function=Choice,
@@ -199,9 +203,10 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
 
 
 handle_event(#wx{event = #wxClose{}}, %close window event, handle memory leak
-    State = #state{ frame=Frame , panel=_Panel
+    State = #state{ frame=Frame , panel=_Panel ,pic_frame  = Frame2
     }) ->
   wxFrame:destroy(Frame),
+  wxFrame:destroy(Frame2),
   io:format("exit~n"),
   {stop,normal,State};
 
@@ -220,16 +225,29 @@ handle_call(_Request, _From, State) ->
 
 
 
+%%#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}
+
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
+
+% X=#wx{obj = _Button, event = _Type},
+
+
+
+
   if
+
+
+
       Flag =:= run ->
       {Fitness,Result,G,Generation} = Outputs,
       Result1=shortcut(Result,[]),
         try
         toGraph:generateGraph(G) of
-          _No_error->       toGraph:replaceImage(State#state.pic_panel),
+          _No_error->
+
+            toGraph:replaceImage(State#state.pic_panel),
             %wxTextCtrl:changeValue(Log, ""), %clean the log
-            wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
+             wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
             wxTextCtrl:changeValue(GenTxT, lists:flatten(io_lib:format("~p", [Generation]))),
             %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
@@ -240,6 +258,7 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
             wxPanel:refresh(FitTXT),
             wxPanel:refresh(ResultTxT),
             wxPanel:refresh(GenTxT)
+         %   timer:sleep(2000)
         catch
           _Reason:_Reason1-> io:format("gui: error get to G because he located in another node ~n but the Fitness is ~p , and network generation is ~p ~n",[Fitness,Generation])
 
@@ -352,18 +371,7 @@ getEdgesList(G)->
   B=digraph:edges(G),
   [digraph:edge(G,E) || E <- B].
 
-run3(W) ->
-  Frame = wxFrame:new(W, -1, "result",[{size, {1024, 768}}]),
-  Panel = wxPanel:new(Frame,[{size, {1024, 768}}]),
-  Vbox = wxBoxSizer:new(?wxVERTICAL),
-  wxSizer:add(Vbox, Panel, [{flag, ?wxEXPAND}]),
-  PictureDraw = wxImage:new("dor.png"),
-  {Width, Height} = wxPanel:getSize(Panel),
-  Image = wxBitmap:new(PictureDraw),
-  F = fun(I, _) -> redraw(Image,I) end,
-  wxPanel:connect(Panel, paint, [{callback,F}]),
-  wxFrame:show(Frame),
-  5.
+
 
 redraw(Image, #wx{obj=Panel}) ->
   DC = wxPaintDC:new(Panel),

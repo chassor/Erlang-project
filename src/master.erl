@@ -136,16 +136,17 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
     NewScore < Score ->
       Score2 = NewScore,
       wx_object:cast(gui_nn,{done,Result}) ;
+
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
   end,
   {_Node,Pid} = maps:get(Pop_name,Nodes),
-  io:format("master:in start_insert massage to: ~p with best score: ~p ~n" ,[Pop_name,Score2]),
+ % io:format("master:in start_insert massage to: ~p with best score: ~p ~n" ,[Pop_name,Score2]),
   gen_statem:cast(Pid,{start_insert,Score2}),
   {noreply, State#master_state{highestScore = Score2}};
 
 handle_cast({Pop_name,worst_result}, State = #master_state{nodes_Map = Nodes ,highestScore = H}) ->
-io:format("master:in in worst_result cast from ~p ,start new iteration!! ~n" ,[Pop_name]),
+%io:format("master:in in worst_result cast from ~p ,start new iteration!! ~n" ,[Pop_name]),
 {_Node,Pid} = maps:get(Pop_name,Nodes),
 gen_statem:cast(Pid,{start_insert,H}),
 {noreply, State#master_state{}};
