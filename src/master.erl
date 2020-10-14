@@ -104,7 +104,8 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
       MapE = maps:put(PopulationID,{node(),Pid} ,maps:new()) ,
       A=insert_cast(maps:to_list(MapE),HighScore),
-      io:format("~p ~n",[A]);
+      io:format("~p ~n",[A]),
+      MonitorPid = spawn(?MODULE,monitor_loop,[]);
     true ->
      {Boolean,List} = trytoconnect(Nodes,[]),
       %{Boolean,List} = {true,[]},
@@ -114,7 +115,7 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       if   % case of god connections to nodes!
         length(Bad_Connection_node_list) =:= 0 ->
           MonitorPid = spawn(?MODULE,monitor_loop,[]),
-          io:format("pawn(master,monitor_loop,[]), answer is: ~p ~n",[P]),
+          io:format("pawn(master,monitor_loop,[]), answer is: ~p ~n",[MonitorPid]),
           Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
           MapE = maps:put(PopulationID,{node(),Pid} ,Map) ,
           A=insert_cast(maps:to_list(MapE),HighScore),
@@ -122,11 +123,15 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
           true ->
             L = maps:to_list(Map),
             stopProcess(L),
+            BufferPid ! kill,
             MapE = maps:new(),
+            MonitorPid = ok,
             wx_object:cast(gui_nn,{insert_nodes_again,Bad_Connection_node_list})
       end ;
     true ->
       MapE = maps:new(),
+      BufferPid ! kill,
+      MonitorPid = ok,
       wx_object:cast(gui_nn,{insert_nodes_again , List})
   end
   end,
