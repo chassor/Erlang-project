@@ -3,7 +3,13 @@
 -include_lib("wx/include/wx.hrl").
 run()->
 
- AB=master:start_link()
+ AB=master:start_link(),
+
+
+  loop()
+
+
+
 .
 
 loop()->

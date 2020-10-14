@@ -135,6 +135,7 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
   if
     NewScore < Score ->
       Score2 = NewScore,
+     % timer:sleep(2000),
       wx_object:cast(gui_nn,{done,Result}) ;
 
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
@@ -223,6 +224,7 @@ startChat([Address|T],Map,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, 
            io:format("catch error in start chat try to rpc node ~p",[_Reason1]),
            startChat(T,Map,BadList ++ [PopulationID],Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs)
   end.
+
 
 
 generate_id() ->

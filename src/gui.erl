@@ -1,7 +1,7 @@
 -module(gui).
 -behaviour(wx_object).
 -import(util,[integer_to_atom/1]).
--export([start/3, init/1,handle_event/2,handle_info/2, handle_call/3,handle_cast/2,code_change/3,terminate/2]).
+-export([start/3, init/1, handle_event/2, handle_info/2, handle_call/3, handle_cast/2, code_change/3, terminate/2, all_messages/1]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
 -record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT ,re_insert_nodes_click}).
