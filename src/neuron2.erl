@@ -180,8 +180,8 @@ code_change(_OldVsn, StateName, State = #neuron2_state{}, _Extra) ->
 
 
 af(AccToAdd,AF) ->
-
 case AF of
+
  relu-> case AccToAdd > 0 of
     true -> AccToAdd;
     false -> 0.01*AccToAdd

@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,input_list,results}).
+-record(nn_agent_state, {sensor_list,actuator_list,actuator_list2,manger_pid,id,graph,input_list,results,result_list}).
 
 %%%===================================================================
 %%% API
@@ -49,7 +49,7 @@ init({SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,ManagerPid,Id,G2})
   end
   ,
   {ok, idle, #nn_agent_state{manger_pid = ManagerPid,id = Id,graph = G,results = maps:new()
-    ,sensor_list = SensorList,actuator_list = maps:from_list(ActList),actuator_list2 = maps:from_list(ActList) }}.
+    ,sensor_list = SensorList,actuator_list = maps:from_list(ActList),actuator_list2 = maps:from_list(ActList),result_list = no_result }}.
 
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
@@ -75,10 +75,17 @@ state_name(_EventType, _EventContent, State = #nn_agent_state{}) ->
   {next_state, NextStateName, State}.
 
 
-idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{}) ->
-  sendInput(InputList,State#nn_agent_state.sensor_list),
-  NextStateName = wait_for_result,
-  {next_state, NextStateName, State#nn_agent_state{input_list = InputList}};
+
+
+idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{result_list = ResList}) ->
+  if
+    is_atom(ResList) =/=true-> gen_statem:cast(State#nn_agent_state.manger_pid,{State#nn_agent_state.id,result,ResList}),
+    {keep_state, State};
+    true-> sendInput(InputList,State#nn_agent_state.sensor_list),
+NextStateName = wait_for_result,
+{next_state, NextStateName, State#nn_agent_state{input_list = InputList}}
+  end ;
+
 
 
 
@@ -104,7 +111,7 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
      % PID_manager !{self(),result,ResultList},
      gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList}),
 
-      {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
+      {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new(),result_list = ResultList}};
     false->{keep_state,State#nn_agent_state{actuator_list2 = Map2,results = ResultsMap}}
 end;
 

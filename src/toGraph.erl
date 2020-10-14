@@ -155,7 +155,7 @@ creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
 
 createFrame()->
   W = wx:new(),
-  Frame = wxFrame:new(W, -1, "result",[{size, {1500, 740}}]),
+  Frame = wxFrame:new(W, -1, "result",[{size, {1400, 740}}]),
   Panel = wxPanel:new(Frame,[{size, {1400, 700}}]),
   Panel2 = wxPanel:new(Frame,[{size, {1400, 700}}]),
 
@@ -178,7 +178,8 @@ createFrame()->
   wxTE_RIGHT}]),
   FitTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
   wxTE_RIGHT}]),
-  GenTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxDEFAULT}]),
+  GenTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
+  wxTE_RIGHT}]),
   Font = wxFont:new(15, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL,?
   wxFONTWEIGHT_BOLD),
   wxTextCtrl:setFont(Res_Label, Font),
@@ -193,15 +194,15 @@ createFrame()->
   CounterSizer = wxBoxSizer:new(?wxHORIZONTAL),
   wxSizer:add(CounterSizer, Res_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
     {border, 5}]),
-  wxSizer:add(CounterSizer, ResTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxSizer:add(CounterSizer, ResTXT, [{proportion,5}, {flag, ?wxEXPAND bor ?
   wxALL}, {border, 5}]),
   wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
     {border, 5}]),
-  wxSizer:add(CounterSizer, FitTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxSizer:add(CounterSizer, FitTXT, [{proportion,2}, {flag, ?wxEXPAND bor ?
   wxALL}, {border, 5}]),
   wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
     {border, 5}]),
-  wxSizer:add(CounterSizer, GenTXT, [{proportion,1}, {flag, ?wxEXPAND bor ?
+  wxSizer:add(CounterSizer, GenTXT, [{flag, ?wxEXPAND bor ?
   wxALL}, {border, 5}]),
   wxSizer:add(MainSizer, CounterSizer, [{flag, ?wxEXPAND}]),
   wxSizer:add(MainSizer,Panel2, [{flag, ?wxEXPAND}]),
@@ -229,10 +230,14 @@ Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),
 F = fun(I, _) -> redraw(Image1,I) end,
 wxPanel:connect(Panel, paint, [{callback,F}]),
-
+  %wxBitmap:destroy(Image1),
+ % wxStaticBitmap:destroy(Image),
+ % wxImage:destroy(PictureDraw1),
 % wxWindow:refresh(Panel,[{eraseBackground,false}]),
   Panel.
 
 redraw(Image, #wx{obj=Panel}) ->
   DC = wxBufferedPaintDC:new(Panel),
-  wxDC:drawBitmap(DC,Image,{100,100}).
+  wxDC:drawBitmap(DC,Image,{100,100}),
+  wxBufferedPaintDC:destroy(DC)
+.

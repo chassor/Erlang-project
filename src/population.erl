@@ -93,10 +93,10 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map})->
-  io:format("pop: im in node1 network_in_computation state ~n"),
+ % io:format("pop: im in node1 network_in_computation state ~n"),
 
   io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
-Fitness = std_fitness(NN_Result),
+Fitness = calcFitness(NN_Result,go_to_pi),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
  % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
@@ -128,7 +128,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
          Best_Fitness_of_this_iteration < Score ->
           gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master}) ;
            true ->
-             io:format(" best score is: ~p ,get low score : ~p so  pop dont sending to master result! ~n",[Score,Best_Fitness_of_this_iteration]),
+    %         io:format(" best score is: ~p ,get low score : ~p so  pop dont sending to master result! ~n",[Score,Best_Fitness_of_this_iteration]),
              gen_server:cast(MainPid,{Id,worst_result})
 
        end,
@@ -293,7 +293,7 @@ generate_id() ->
 
 insert_inputs([],_)->ok;
 insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
-  io:format("pop: im in pop insert mean the gen cast works ~n"),
+ % io:format("pop: im in pop insert mean the gen cast works ~n"),
   gen_statem:cast(PID,{self(),insert_input,Inputs}),
   insert_inputs(T,Inputs).
 
@@ -335,3 +335,14 @@ fitness([],Sum)->
 fitness([H|T],Sum)->
   Sum2=Sum+(H*H),
   fitness(T,Sum2).
+
+
+calcFitness(NNResult, Fitness) ->
+case Fitness of
+  go_to_pi->goToPi(NNResult,0)
+
+end
+.
+goToPi([],Sum)->Sum;
+goToPi([H|T], Sum) ->
+  goToPi(T,Sum+abs(math:pi()-H)).
