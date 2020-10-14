@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid,monitorPid}).
 
 %%%===================================================================
 %%% API
@@ -113,7 +113,7 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       {Map,Bad_Connection_node_list} = startChat(Nodes,maps:new(),[],self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
       if   % case of god connections to nodes!
         length(Bad_Connection_node_list) =:= 0 ->
-          P=spawn(?MODULE,monitor_loop,[]),
+          MonitorPid = spawn(?MODULE,monitor_loop,[]),
           io:format("pawn(master,monitor_loop,[]), answer is: ~p ~n",[P]),
           Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
           MapE = maps:put(PopulationID,{node(),Pid} ,Map) ,
@@ -130,7 +130,7 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       wx_object:cast(gui_nn,{insert_nodes_again , List})
   end
   end,
-  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid}};
+  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid,monitorPid = MonitorPid}};
 
 handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
@@ -157,9 +157,10 @@ gen_statem:cast(Pid,{start_insert,H}),
 
 
 
-handle_cast({stop},State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid}) ->
+handle_cast({stop},State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid,monitorPid = MonitorPid}) ->
   io:format("master:im in handle stop "),
   BufferPid ! kill,
+  MonitorPid ! kill,
   Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
   stopProcess(L),
@@ -318,7 +319,8 @@ monitor_loop()->
     {Message, Node} ->
       io:format("im in the monitor loop got a message: ~p from ~p  ~n",[Message,Node]),
      wx_object:cast(gui_nn,{node_down,Message,Node}),
-      monitor_loop()
+      monitor_loop();
+    kill -> out
   end.
 
 buffer()->
