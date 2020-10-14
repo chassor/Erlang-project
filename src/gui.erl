@@ -132,7 +132,7 @@ initiation(_Mode,_Node,Pid) ->
 
 
 
-handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
+handle_event(W=#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
     State = #state{
       activation_function=Choice,
       neurons=NeuronsP,
@@ -186,13 +186,13 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
 
     true ->
       Flag2 = stop,
+      wxButton:disable(B),
       gen_server:cast(Pid,{stop}),
       Click2 = 0 ,
       terminating_func(3,Parent,B),
       wxButton:setLabel(B,"please wait"),
       wxTextCtrl:changeValue(Log, "closing simulation"),
 
-      wxTextCtrl:changeValue(Log, "you can start again with different values"),
       wxPanel:refresh(Parent) %refresh the panel
   end,
 
@@ -290,6 +290,7 @@ handle_cast({finish_terminate}, State = #state{
   button = B,
   flag=stop}) ->
   wxButton:setLabel(B,"start"),
+  wxButton:enable(B),
   wxTextCtrl:changeValue(Log, "you can start again with different values"),
   wxPanel:refresh(Parent), %refresh the panel
 
