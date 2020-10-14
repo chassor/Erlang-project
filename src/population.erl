@@ -117,7 +117,7 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
        Best_Fitness_of_this_iteration = element(4,R),
        Generation = maps:get(KEY,Generation_map),
       Result_for_master = {Best_Fitness_of_this_iteration,element(5,R),G,Generation},
-       {Map2,Gmap}=terminate_worst_nn(WorstNN,MAP,Generation_map),
+       {Map2,Gmap} = terminate_worst_nn(WorstNN,MAP,Generation_map),
        {Map3,Gmap2} = create_NN_Agents_M(Map2,BestNN,Gmap,State),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
@@ -195,7 +195,7 @@ handle_event(_EventType, _EventContent, _StateName, State = #population_state{})
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
 terminate(Reason, StateName, _State = #population_state{nn_pids_map = Map }) ->
-  io:format("node terminate ~p ~p ~n",[Reason,StateName]),
+  io:format("population : node terminate ~p in ~p state ~n",[Reason,StateName]),
   L = maps:to_list(Map),
   [ gen_statem:stop(PID)  || {_KEY,{PID,_G}} <- L],
    ok.

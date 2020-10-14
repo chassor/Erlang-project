@@ -45,7 +45,7 @@ initiation(_Mode,_Node,Pid) ->
     [{label, " start Neuroevolution calculation"}]),
   LogSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "log"}]),
-  Nodes  = wxTextCtrl:new(Panel, 5, [{value, "node1@hananel-virtual-machine"},
+  Nodes  = wxTextCtrl:new(Panel, 5, [{value, "node1@avnido-VirtulBox"},
     {style, ?wxDEFAULT}]),
 
 
@@ -147,7 +147,7 @@ handle_event(#wx{obj = _Button, event = #wxCommand{type = command_button_clicked
       flag=run}) ->
       L3=string:split(wxTextCtrl:getValue(Node),",",all),
       Nodes_List=[list_to_atom(A)||A<-L3],
-      Nodes_List2_for_dibug = ['node1@avnido-VirtualBox'],  %todo delete thid
+      Nodes_List2_for_dibug = [nonode@nohost],  %todo delete thid
 
 
   if
@@ -276,8 +276,10 @@ handle_cast({finish_terminate}, State = #state{
 
   {noreply,State#state{flag=run}};
 
-handle_cast({insert_nodes_again}, State = #state{frame = Parent ,log = Log ,button = B ,node = Nodes }) ->
-  wxTextCtrl:changeValue(Log,"wrong connection to nodes please open new termials and try again"),
+handle_cast({insert_nodes_again , List_of_bad_nodes}, State = #state{frame = Parent ,log = Log ,button = B ,node = Nodes }) ->
+  M = wxMessageDialog:new(wx:null(), lists:flatten(io_lib:format(" connections error with nodes: ~p", [List_of_bad_nodes])) ),
+  wxMessageDialog:showModal(M),
+  wxTextCtrl:writeText(Log,"try to connect agin "),
   wxTextCtrl:changeValue(Nodes,""),
   wxButton:enable(B),
   wxButton:setLabel(B,"press to insert new nodes"),

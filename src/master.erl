@@ -92,30 +92,42 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%  {noreply, State};
 
 handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
-  H=10000000000,
+  HighScore=10000000000,
+  PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [?MODULE]))),
   io:format("master:im in the master start pops ~n"),
   Num_of_live = num_of_alive_processes(),
   Inputs = generate_inputs(Sensors,[]),
-  trytoconnect(Nodes) , %---- for terminal
-  {Map,OK} = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
-  S=maps:size(Map),
+  BB=length(atom_to_list(hd(Nodes))),
   if
-    OK =:= error ->
-      MapE=maps:new(),
-      if
-        S =:= 0  -> wx_object:cast(gui_nn,{insert_nodes_again}) ;
-        true ->
-          L = maps:to_list(Map),
-          stopProcess(L),
-          wx_object:cast(gui_nn,{insert_nodes_again})
-      end;
+      BB =:=0->
+      Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
+      MapE = maps:put(PopulationID,{node(),Pid} ,maps:new()) ,
+      A=insert_cast(maps:to_list(MapE),HighScore),
+      io:format("~p ~n",[A]);
     true ->
-      MapE = Map ,
-      A=insert_cast(maps:to_list(Map),H),
-      io:format("~p ~n",[A])
+    {Boolean,List} = trytoconnect(Nodes,[]),
+      %{Boolean,List} = {true,[]},
+  if
+    Boolean andalso length(List) =:= 0 ->
+      {Map,Bad_Connection_node_list} = startChat(Nodes,maps:new(),[],self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
+      if   % case of god connections to nodes!
+        length(Bad_Connection_node_list) =:= 0 ->
+          Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
+          MapE = maps:put(PopulationID,{node(),Pid} ,Map) ,
+          A=insert_cast(maps:to_list(MapE),HighScore),
+          io:format("~p ~n",[A]);
+          true ->
+            L = maps:to_list(Map),
+            stopProcess(L),
+            MapE = maps:new(),
+            wx_object:cast(gui_nn,{insert_nodes_again,Bad_Connection_node_list})
+      end ;
+    true ->
+      MapE = maps:new(),
+      wx_object:cast(gui_nn,{insert_nodes_again , List})
+  end
   end,
-
-  {noreply, State#master_state{nodes_Map = MapE, highestScore = H}};
+  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore}};
 
 handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
@@ -123,7 +135,6 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
   if
     NewScore < Score ->
       Score2 = NewScore,
-      timer:sleep(2000),
       wx_object:cast(gui_nn,{done,Result}) ;
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
@@ -189,21 +200,28 @@ code_change(_OldVsn, State = #master_state{}, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-startChat([],Map,_,_,_,_,_,_,_,_) -> {Map,ok};
+startChat([],Map,BadList,_,_,_,_,_,_,_,_) -> {Map,BadList};
 
-startChat([Address|T],Map,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
+startChat([Address|T],Map,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
   N = maps:size(Map)+1,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [N]))),
-     Answer=rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
+  try
+     Answer = rpc:call(Address, population, start_link, [Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,PopulationID]),
       io:format("master:rpc sent answer: ~p ~n" ,[Answer]),
       if
         is_pid(Answer)->
           M2 = maps:put(PopulationID,{Address,Answer},Map),
-          startChat(T,M2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
-         true ->  io:format("wrong rpc cast to node ~p",[Address]),
-           {Map,error}
-      end.
-
+          startChat(T,M2,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
+         true ->
+           io:format("wrong rpc cast to node ~p",[Address]),
+           L2 = BadList ++ [Address],
+           startChat(T,Map,L2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs)
+      end
+     catch
+         _Reason:_Reason1->
+           io:format("catch error in start chat try to rpc node ~p",[_Reason1]),
+           startChat(T,Map,BadList ++ [PopulationID],Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs)
+  end.
 
 
 generate_id() ->
@@ -224,12 +242,21 @@ random_input()->
     2-> Y=-1*X
   end,
   Y.
-trytoconnect([])-> ok,io:format("master good connections to nodes ~n");
-trytoconnect([H|T]) ->
+trytoconnect([],L)->
+  if
+    length(L) =:= 0 ->
+      io:format("master good connections to nodes ~n"),
+      {true,L};
+    true -> {flase,L}
+  end;
+trytoconnect([H|T],L) ->
  A =net_kernel:connect_node(H),
   if
-    A =:= true -> trytoconnect(T)  ;
-    true ->  io:format(" connection mistake ~n")
+    A =:= true -> trytoconnect(T,L);
+    true->
+          io:format(" connection mistake to node ~p ~n" , [H]),
+          L2 = L ++ [H],
+          trytoconnect(T,L2)
   end.
 
 insert_cast([],_)->ok;
