@@ -8,12 +8,11 @@
 %%%-------------------------------------------------------------------
 -module(master).
 -author("DOR").
--include_lib("wx/include/wx.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, makeItCrash/1]).
+-export([start_link/0, makeItCrash/1, buffer/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -21,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid}).
 
 %%%===================================================================
 %%% API
@@ -93,6 +92,7 @@ handle_call(_Request, _From, State = #master_state{}) ->
 %%  {noreply, State};
 
 handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
+  BufferPid=spawn(?MODULE,buffer,[]),
   HighScore=10000000000,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [?MODULE]))),
   io:format("master:im in the master start pops ~n"),
@@ -130,17 +130,17 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       wx_object:cast(gui_nn,{insert_nodes_again , List})
   end
   end,
-  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore}};
+  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid}};
 
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes}) ->
+handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
   {NewScore,_,_,_} = Result,
   if
     NewScore < Score ->
       Score2 = NewScore,
      % timer:sleep(2000),
-      wx_object:cast(gui_nn,{done,Result}) ;
-
+   %   wx_object:cast(gui_nn,{done,Result}) ;
+     BufferPid! {done,Result};
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
   end,
@@ -157,8 +157,9 @@ gen_statem:cast(Pid,{start_insert,H}),
 
 
 
-handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
-  io:format("master:im in handle stop ~n "),
+handle_cast({stop},State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid}) ->
+  io:format("master:im in handle stop "),
+  BufferPid ! kill,
   Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
   stopProcess(L),
@@ -318,4 +319,26 @@ monitor_loop()->
       io:format("im in the monitor loop got a message: ~p from ~p  ~n",[Message,Node]),
      wx_object:cast(gui_nn,{node_down,Message,Node}),
       monitor_loop()
+  end.
+
+buffer()->
+  receive
+    kill->
+      A=gui:all_messages([]),
+      io:format("bufferkilld with messages"),
+      ok;
+
+    {done,Result}-> wx_object:cast(gui_nn,{done,Result}),
+      io:format("buffer sent result ~n"),
+      buffer2()
+  end.
+
+buffer2() ->
+  receive
+    kill->
+      A=gui:all_messages([]),
+      io:format("bufferkilld with messages"),
+      ok
+  after 1500-> buffer()
+
   end.
