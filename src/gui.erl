@@ -228,16 +228,8 @@ handle_call(_Request, _From, State) ->
 %%#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}
 
 handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
-
 % X=#wx{obj = _Button, event = _Type},
-
-
-
-
   if
-
-
-
       Flag =:= run ->
       {Fitness,Result,G,Generation} = Outputs,
       Result1=shortcut(Result,[]),
@@ -305,6 +297,20 @@ handle_cast({insert_nodes_again , List_of_bad_nodes}, State = #state{frame = Par
   wxTextCtrl:changeValue(Nodes,""),
   wxPanel:refresh(Parent), %refresh the panel ;;
   {noreply,State#state{clicked =0,flag=run}};
+
+
+handle_cast({node_down,Message,Node}, State = #state{frame=Parent}) ->
+  io:format("im in node down case in the gui!!"),
+  M = wxMessageDialog:new(wx:null(), lists:flatten(io_lib:format(" what a catch!!!!!!! ~n amazing monitor created, message : ~p from Node: ~p down. ~n", [Message,Node]))),
+  wxMessageDialog:showModal(M),
+  wxPanel:refresh(Parent), %refresh the panel
+  {noreply,State#state{}};
+
+
+
+
+
+
 
 
 handle_cast(_Msg, State) ->

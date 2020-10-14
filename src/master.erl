@@ -8,6 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(master).
 -author("DOR").
+-include_lib("wx/include/wx.hrl").
 
 -behaviour(gen_server).
 
@@ -16,7 +17,7 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3, num_of_alive_processes/0]).
+  code_change/3, num_of_alive_processes/0,monitor_loop/0]).
 
 -define(SERVER, ?MODULE).
 
@@ -105,13 +106,15 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       A=insert_cast(maps:to_list(MapE),HighScore),
       io:format("~p ~n",[A]);
     true ->
-    {Boolean,List} = trytoconnect(Nodes,[]),
+     {Boolean,List} = trytoconnect(Nodes,[]),
       %{Boolean,List} = {true,[]},
   if
     Boolean andalso length(List) =:= 0 ->
       {Map,Bad_Connection_node_list} = startChat(Nodes,maps:new(),[],self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
       if   % case of god connections to nodes!
         length(Bad_Connection_node_list) =:= 0 ->
+          P=spawn(?MODULE,monitor_loop,[]),
+          io:format("pawn(master,monitor_loop,[]), answer is: ~p ~n",[P]),
           Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
           MapE = maps:put(PopulationID,{node(),Pid} ,Map) ,
           A=insert_cast(maps:to_list(MapE),HighScore),
@@ -155,7 +158,7 @@ gen_statem:cast(Pid,{start_insert,H}),
 
 
 handle_cast({stop},State = #master_state{nodes_Map = Nodes}) ->
-  io:format("master:im in handle stop "),
+  io:format("master:im in handle stop ~n "),
   Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
   stopProcess(L),
@@ -215,13 +218,13 @@ startChat([Address|T],Map,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, 
           M2 = maps:put(PopulationID,{Address,Answer},Map),
           startChat(T,M2,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs);
          true ->
-           io:format("wrong rpc cast to node ~p",[Address]),
+           io:format("wrong rpc cast to node ~p~n",[Address]),
            L2 = BadList ++ [Address],
            startChat(T,Map,L2,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs)
       end
      catch
          _Reason:_Reason1->
-           io:format("catch error in start chat try to rpc node ~p",[_Reason1]),
+           io:format("catch error in start chat try to rpc node ~p ~n",[_Reason1]),
            startChat(T,Map,BadList ++ [PopulationID],Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs)
   end.
 
@@ -264,11 +267,11 @@ trytoconnect([H|T],L) ->
 
 insert_cast([],_)->ok;
 insert_cast([{KEY,{_Node,Pid}}|T], Highest_score) ->
-  io:format("master:start insert from master to ~p ~n" , [KEY]),
+  %io:format("master:start insert from master to ~p ~n" , [KEY]),
   Answer=gen_statem:cast(Pid,{start_insert,Highest_score}),
   %'node1@avnido-VirtualBox'
   %Answer=gen_statem:cast({global,KEY},{start_insert}),
-  io:format("master :cast to pop start insert to ~p , Answer is : ~p ~n" , [KEY,Answer]),
+  %io:format("master :cast to pop start insert to ~p , Answer is : ~p ~n" , [KEY,Answer]),
   insert_cast(T,Highest_score).
 
 
@@ -303,5 +306,16 @@ deleteResults(L)->
 
 
 makeItCrash(N)->
-  1/(1-rand:uniform(N))
-  .
+  1/(1-rand:uniform(N)).
+
+
+
+monitor_loop()->
+  net_kernel:monitor_nodes(true),
+  io:format("im in the monitor loop ~n"),
+  receive
+    {Message, Node} ->
+      io:format("im in the monitor loop got a message: ~p from ~p  ~n",[Message,Node]),
+     wx_object:cast(gui_nn,{node_down,Message,Node}),
+      monitor_loop()
+  end.

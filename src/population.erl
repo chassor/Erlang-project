@@ -56,7 +56,7 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2 , generation_Map = GeMAp}}.
 
 idle(cast,{start_insert,Highest_score},State = #population_state{id = Id})->
-  io:format("pop: im in ~p idle state ~n" ,[Id]),
+  %io:format("pop: im in ~p idle state ~n" ,[Id]),
   Map=State#population_state.nn_pids_map,
   Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
@@ -95,7 +95,7 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map})->
  % io:format("pop: im in node1 network_in_computation state ~n"),
 
-  io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
+  %io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
 Fitness = calcFitness(NN_Result,go_to_pi),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
@@ -219,7 +219,7 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
 
 create_NN_Agents(0,Map,Gmap,_)->{Map,Gmap};
 create_NN_Agents(N,Map,Gmap,S)->
-  io:format("pop:create_NN_Agents ~n"),
+  %io:format("pop:create_NN_Agents ~n"),
   Key = genarateIdfromAtom(),
   PID = nn_agent:start_link(S#population_state.sensorNum,S#population_state.actuatorNum,S#population_state.numOfLayers,
     S#population_state.numOfNeuronsEachLayer,self(),Key,new),
