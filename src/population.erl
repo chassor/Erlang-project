@@ -5,7 +5,7 @@
 -module(population).
 -author("DOR").
 -behaviour(gen_statem).
--export([start_link/9,fitness/2,network_in_computation/3,minn/2,create_new_generation/3,idle/3,c/0]).
+-export([start_link/9,fitness/2,network_in_computation/3,minn/2,idle/3]).
 
 %% gen_statem callbacks
 -export([init/1, format_status/2, state_name/3, handle_event/4, terminate/3,
@@ -30,13 +30,11 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %%% gen_statem callbacks
 %%%===================================================================
 
-%% @private
-%% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
-%% gen_statem:start_link/[3,4], this function is called by the new
-%% process to initialize.
+
+%%  this function is called by the new process to initialize the population records values, and build our networks by the passed values .
 init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer, Fit,Num_Of_NN_AGENTS,Inputs,ID}) ->
  %process_flag(trap_exit, true),
- Y2= global:register_name(ID,self()),
+ global:register_name(ID,self()),
  io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
   State=#population_state{
     id = ID ,
@@ -50,15 +48,15 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer, Fit,Num_
     fitnessFunc = Fit,
     highest_score = 1000000000,
     finesses_Map = maps:new()},
-  {PIMap,GeMAp}=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),maps:new(),State),
-  Map2= received_graphs(PIMap,maps:to_list(PIMap)),
+  {PIMap,GeMAp} = create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),maps:new(),State),
+  Map2 = received_graphs(PIMap,maps:to_list(PIMap)),
   io:format(" finish_initilize node ~n" , []),
   {ok, idle, State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2 , generation_Map = GeMAp}}.
 
-idle(cast,{start_insert,Highest_score},State = #population_state{id = Id})->
+
+%%  this function is called to insert inputs to the networks for calculation , so we sending insert message to all neurons network with the inputs .
+idle(cast,{start_insert,Highest_score},State = #population_state{nn_pids_map = Map ,inputs = Inputs})->
   %io:format("pop: im in ~p idle state ~n" ,[Id]),
-  Map=State#population_state.nn_pids_map,
-  Inputs=State#population_state.inputs,
   insert_inputs(maps:to_list(Map),Inputs),
   NextStateName = network_in_computation,
   {next_state, NextStateName, State#population_state{highest_score = Highest_score}};
@@ -91,40 +89,29 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
   {next_state, NextStateName, State}.
 
 
-
+% in this state we gets result from all the neuron networks that under this population ,
+% when all result received we choose the networks that achieve the best fitness and the networks that achieve the worst fitness ,
+%best networks survived and the result of the one with the best fitness forward to master , worst networks terminates , and new networks created with mutate the best networks.
 network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map,fitnessFunc = Fit})->
- % io:format("pop: im in node1 network_in_computation state ~n"),
-
-  %io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
 Fitness = calcFitness(NN_Result,Fit),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
- % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
- % io:format("MAP2 =~p ~n",[maps:keys(State#population_state.nn_pids_map2)]),
-  %io:format("KEY =~p ~n",[KEY]),
- % io:format("countermap =~p ~n",[Counter]),
   Size = maps:size(Counter),
- % io:format("pop: im in node1 mapSize =~p ~n",[Size]),
   if
-     Size =:= 0 ->
-   %    io:format("pop: im in node mapSize =0 ~n"),
-      MAP=State#population_state.nn_pids_map,
-      R = split_nn(UpdateFitnessMap),
-      BestNN  = element(1,R),
-      WorstNN = element(2,R),
-      {_Pid,G2} = maps:get(element(3,R),MAP),
-       G={toGraph:getVerticesList(G2),toGraph:getEdgesList(G2)},
-       Best_Fitness_of_this_iteration = element(4,R),
-       Generation = maps:get(KEY,Generation_map),
-      Result_for_master = {Best_Fitness_of_this_iteration,element(5,R),G,Generation},
-       {Map2,Gmap} = terminate_worst_nn(WorstNN,MAP,Generation_map),
-       {Map3,Gmap2} = create_NN_Agents_M(Map2,BestNN,Gmap,State),
-      %Keys_good_map=maps:without(maps:keys(Map2),Map3),
-      MangerPid=State#population_state.main_PID,
-      FitnessMap3=update_fitness_map(UpdateFitnessMap,WorstNN),
-       Processes = master:num_of_alive_processes(),
-      %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
-  %     io:format("going to cast master ~n"),
+    Size =:= 0 ->
+         MAP=State#population_state.nn_pids_map,
+         R = split_nn(UpdateFitnessMap),
+         BestNN  = element(1,R),
+         WorstNN = element(2,R),
+         {_Pid,G2} = maps:get(element(3,R),MAP),
+         G={toGraph:getVerticesList(G2),toGraph:getEdgesList(G2)},
+         Best_Fitness_of_this_iteration = element(4,R),
+         Generation = maps:get(KEY,Generation_map),
+         Result_for_master = {Best_Fitness_of_this_iteration,element(5,R),G,Generation},
+         {Map2,Gmap} = terminate_worst_nn(WorstNN,MAP,Generation_map),
+         {Map3,Gmap2} = create_NN_Agents_M(Map2,BestNN,Gmap,State),
+         FitnessMap3=update_fitness_map(UpdateFitnessMap,WorstNN),
+         Processes = master:num_of_alive_processes(),
        if
          Best_Fitness_of_this_iteration < Score ->
           gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master,Processes}) ;
@@ -145,21 +132,23 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
 network_in_computation(EventType, EventContent, Data) ->
   handle_common(EventType, EventContent, Data,network_in_computation).
 
-create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
-  Tuple={element(1,maps:get(KEY,State#population_state.nn_pids_map)),Mutation_G},
-  Map2 = maps:put(KEY,Tuple,State#population_state.nn_pids_map),
-  Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
-  Size = maps:size(Counter),
-  if
-    Size =:= 0 ->
-      MangerPid=State#population_state.main_PID,
-      MangerPid ! {self(),new_gen_hit_me},
-      {next_state,idle,State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2  }}  ;
-    true -> {keep_state,State#population_state{nn_pids_map2 = Counter , nn_pids_map = Map2 }}
-  end;
 
-create_new_generation(EventType, EventContent, Data) ->
-  handle_common(EventType, EventContent, Data,create_new_generation).
+%%
+%%create_new_generation(cast,{KEY,new_nn_mutation,Mutation_G},State  = #population_state{})->
+%%  Tuple={element(1,maps:get(KEY,State#population_state.nn_pids_map)),Mutation_G},
+%%  Map2 = maps:put(KEY,Tuple,State#population_state.nn_pids_map),
+%%  Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
+%%  Size = maps:size(Counter),
+%%  if
+%%    Size =:= 0 ->
+%%      MangerPid=State#population_state.main_PID,
+%%      MangerPid ! {self(),new_gen_hit_me},
+%%      {next_state,idle,State#population_state{nn_pids_map = Map2, nn_pids_map2 = Map2  }}  ;
+%%    true -> {keep_state,State#population_state{nn_pids_map2 = Counter , nn_pids_map = Map2 }}
+%%  end;
+%%
+%%create_new_generation(EventType, EventContent, Data) ->
+%%  handle_common(EventType, EventContent, Data,create_new_generation).
 
 
 
@@ -190,11 +179,7 @@ handle_event(_EventType, _EventContent, _StateName, State = #population_state{})
   NextStateName = the_next_state_name,
   {next_state, NextStateName, State}.
 
-%% @private
-%% @doc This function is called by a gen_statem when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_statem terminates with
-%% Reason. The return value is ignored.
+%%This function is called by a gen_statem when it is about to terminate , so we terminates all the neuron networks that we created .
 terminate(Reason, StateName, _State = #population_state{nn_pids_map = Map }) ->
   io:format("population : node terminate ~p in ~p state ~n",[Reason,StateName]),
   L = maps:to_list(Map),
@@ -217,7 +202,7 @@ code_change(_OldVsn, StateName, State = #population_state{}, _Extra) ->
 
 
 
-
+%% In this func we create the networks and update the relevant maps.
 create_NN_Agents(0,Map,Gmap,_)->{Map,Gmap};
 create_NN_Agents(N,Map,Gmap,S)->
   %io:format("pop:create_NN_Agents ~n"),
@@ -228,6 +213,7 @@ create_NN_Agents(N,Map,Gmap,S)->
   Gmap2 = maps:put (Key,1,Gmap),
   create_NN_Agents(N-1,Map2,Gmap2,S).
 
+%% In this func we create the mutate networks and update the relevant maps.
 create_NN_Agents_M(M,[],Gmap,_)->{M,Gmap};
 create_NN_Agents_M(M,[H|T],Gmap,S)->
   NewKey = genarateIdfromAtom(),
@@ -245,7 +231,7 @@ create_NN_Agents_M(M,[H|T],Gmap,S)->
 
 
 
-
+%% In this func we terminate the worst networks and update the relevant maps.
 terminate_worst_nn([],Map,Gmap)->{Map,Gmap};
 
 terminate_worst_nn([H|T],Map,Gmap)->
@@ -259,7 +245,8 @@ terminate_worst_nn([H|T],Map,Gmap)->
   terminate_worst_nn(T,Map2,Gmap2).
 
 
-
+%% In this func we get the fitness map ,
+%% and return tuple with the result for master include the two list of best and worst networks and the digraph and the best fitness.
 split_nn(FitnessMAp)->
     Fun=fun(A,B)->minn(A,B)end,
     Sort_List = lists:sort(Fun,maps:to_list(FitnessMAp)),
@@ -269,6 +256,7 @@ split_nn(FitnessMAp)->
       Return = {BestNN,WorstNN,element(1,L),element(1,element(2,L)),element(2,element(2,L))},
       Return.
 
+%% this function check min between two finesses that store in tuples
     minn(A,B) when is_tuple(A) and is_tuple(B)->
       {_Key1,{Val1,_Result1}} = A,
       {_Key2,{Val2,_Result2}} = B,
@@ -277,6 +265,7 @@ split_nn(FitnessMAp)->
         true -> false
       end.
 
+%% In this func we store in our maps the digraph for every network .
 received_graphs(Map,[])->Map;
 received_graphs(Map,[H|T])->
   Key = element(1,H),
@@ -287,33 +276,29 @@ received_graphs(Map,[H|T])->
   Map2 = maps:put(Key,Tuple,Map),
   received_graphs(Map2,T).
 
+%The generate_id/0 creates a unique Id using current time, the Id is a floating point value. The generate_ids/2 function creates a list of unique Ids.
 generate_id() ->
   {MegaSeconds,Seconds,MicroSeconds} = now(),
   1/(MegaSeconds*1000000 + Seconds + MicroSeconds/1000000).
-%The generate_id/0 creates a unique Id using current time, the Id is a floating point value. The generate_ids/2 function creates a list of unique Ids.
 
+
+%% In this func we send start massage to networks for calculation .
 insert_inputs([],_)->ok;
 insert_inputs([{_KEY,{PID,_G}}|T],Inputs) ->
  % io:format("pop: im in pop insert mean the gen cast works ~n"),
   gen_statem:cast(PID,{self(),insert_input,Inputs}),
   insert_inputs(T,Inputs).
 
-
+%The genarateIdfromAtom creates a unique atom by using the unique Ids from generate_id func .
 genarateIdfromAtom()->list_to_atom(lists:flatten(io_lib:format("nn~p", [generate_id()]))).
 
-%[{Key,Fintess},{}..]
+%% this function remove the worst networks from the map .
 update_fitness_map(M,[])->M;
 update_fitness_map(M,[{Key,_}|T]) ->
   M2 = maps:remove(Key,M),
   update_fitness_map(M2,T).
 
-
-c()->
-  compile:file('nn_agent'),
-  compile:file('neuron2'),
-  compile:file('mutate_generator').
-
-
+% return avg of list
 avg(List)->
   lists:sum(List)/length(List).
 
@@ -328,6 +313,7 @@ std_fitness([],_Avg,Acc)->
   Variance = lists:sum(Acc)/length(Acc),
   math:sqrt(Variance).
 
+% fitness function that calculate distance from 3 of the sqr of results.
 fitness(L)->fitness(L,0).
 
 fitness([],Sum)->
@@ -337,19 +323,20 @@ fitness([H|T],Sum)->
   Sum2=Sum+(H*H),
   fitness(T,Sum2).
 
-
+%% this function retuen the wanted fitness by calling the relevant fitness function .
 calcFitness(NNResult, Fitness) ->
 case Fitness of
   go_to_pi->goToPi(NNResult,0);
   go_to_e->goToE(NNResult,0,math:exp(1))
 
-end
-.
+end.
+
+%% In this func we calculate distance of every result from pi
 goToPi([],Sum)->Sum;
 goToPi([H|T], Sum) ->
   goToPi(T,Sum+abs(math:pi()-H)).
 
-
+%% In this func we calculate distance of every result from E
 goToE([],Sum,_)->Sum;
 goToE([H|T], Sum,E) ->
   goToE(T,Sum+abs(E-H),E).
