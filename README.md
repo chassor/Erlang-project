@@ -9,7 +9,7 @@
     Out final project on 'Concurrent and Distributed Programming' course, Ben Gurion University of the Negev.
     <br />
   </p>
-</p>
+
 
 
 
@@ -28,26 +28,35 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-modular neuroevolution simulation using erlang proccesses as neurons  
+modular neuroevolution simulation using erlang processes as neurons  
 
 * using gen_statem OTP for neurons
+* using gen_server OTP for master
+* using wx widegt for gui
 * using Graphwiz package
 
 ### Built With
 * [Erlang](https://www.erlang.org/) - version 23
 
 
+
 <!-- GETTING STARTED -->
 ## Getting Started
 
 
-install graphwiz package from graphwiz.org
-Open folder and terminal for the 'master' node compile the files and run the program from master
+install graphwiz package from graphwiz.org.
+Open folder and terminal for the 'master' node.
+ compile the files and run the program from master
 
 
-
+in terminal:
 ```sh
 erl -name master
+```
+
+
+in erlang shell:
+```sh
 make:all().
 master:run().
 ```
@@ -55,7 +64,9 @@ master:run().
 <h3>Submaster: </h3>
 Do the next stages for every other node, every node will be a population of NN's.
 
-start erlang shell and isert the node name
+
+start erlang shell and insert the node name
+
 ```sh
 erl -sname nodex
 ```
@@ -96,16 +107,15 @@ master:run().
 <br />
 
 * choose fitness func</b>. 
-* choose resolution.
+* choose resolution of simulation.
 * choose number of sensors, neurons, actuators for initial NN. 
 * Insert the short/long names of all the nodes separated by comma .
 * Click 'start'
-* if there no connection problem the simulation will start.
+* if there are no connection problem the simulation will start.
 <br />
 <br />
 
-![GitHub Logo](/1.jpg)
-Format: ![Alt Text](url)
+
 
 
 <!-- CONTACT -->
