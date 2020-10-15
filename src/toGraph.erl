@@ -13,6 +13,9 @@
 -export([generateGraph/1, createFrame/2, replaceImage/3, getEdgesList/1, getVerticesList/1]).
 -include_lib("wx/include/wx.hrl").
 
+
+
+%%create graph pic to show
 generateGraph({Vertices,Edges})->
   L1=Edges,
   L3=Vertices,
@@ -38,7 +41,7 @@ to_file(Graph, File, Format) ->
   X.
 
 to_dot(Graph, File) ->
-  {GraphId, Type, GraphOptions, Nodes, Edges} = Graph,
+  {GraphId, Type, _GraphOptions, Nodes, Edges} = Graph,
   {GraphType, EdgeType} = Type,
 
 
@@ -125,6 +128,8 @@ getVerticesList(G)->
   [digraph:vertex(G,V) || V <- A].
 
 
+
+%%create nodes list
 createNodesList(_,[],L) ->lists:sort(L);
 createNodesList(Map,[H|T],L) ->
   {A2,{B,_C,_D,E,F,G}}=H ,
@@ -139,8 +144,8 @@ createNodesList(Map,[H|T],L) ->
 
 
 
-
-creatMapOfNewNames([], Map,N) ->Map;
+%%create map with names to the graph
+creatMapOfNewNames([], Map,_N) ->Map;
 creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
   if
     A=:=neuron->NewName=list_to_atom(lists:flatten(io_lib:format("x~p", [N])));
@@ -152,7 +157,7 @@ creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
 
 
 
-
+%%create frame to show on the screen
 createFrame(Width,Height)->
   W = wx:new(),
   Frame = wxFrame:new(W, -1, "result",[{size, {Width, Height+150}}]),
@@ -162,16 +167,12 @@ createFrame(Width,Height)->
   Font = wxFont:new(15, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL,?
   wxFONTWEIGHT_BOLD),
 
-
-
   Res_Label = wxStaticText:new(Panel, ?wxID_ANY, "results:", [{style, ?wxALIGN_RIGHT}]),
   wxStaticText:wrap(Res_Label,100),
   wxTextCtrl:setFont(Res_Label, Font),
   ResTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxTE_RIGHT}]),
   wxTextCtrl:setFont(ResTXT, Font),
   wxTextCtrl:setEditable(ResTXT, false),
-
-
 
   Processes_Label = wxStaticText:new(Panel, ?wxID_ANY, "Processes:", [{style, ?wxALIGN_RIGHT}]),
   wxStaticText:wrap(Processes_Label,100),
@@ -206,17 +207,16 @@ createFrame(Width,Height)->
   CounterSizer = wxBoxSizer:new(?wxHORIZONTAL),
   CounterSizer2 = wxBoxSizer:new(?wxHORIZONTAL),
 
-  wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
   wxSizer:add(CounterSizer, FitTXT,    [{proportion,7},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
   wxSizer:add(CounterSizer, GenTXT,     [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer, Processes_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Processes_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
   wxSizer:add(CounterSizer, ProcessesTXT,     [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer2, Res_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, Res_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
   wxSizer:add(CounterSizer2, ResTXT, [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer2, Inp_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, Inp_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border, 5}]),
   wxSizer:add(CounterSizer2, InpTXT, [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
-
 
 
   wxSizer:add(MainSizer, CounterSizer, [{flag, ?wxEXPAND}]),
@@ -238,12 +238,13 @@ createFrame(Width,Height)->
   {Frame,Panel2,ResTXT,FitTXT,GenTXT,ProcessesTXT,InpTXT}.
 
 
-
+%%replace image of the graph in the frame
 replaceImage(Panel,Width,Height) ->
 PictureDraw1 = wxImage:new("dor.png"),
 PictureDraw=wxImage:rescale(PictureDraw1,Width,Height,[{quality,?wxIMAGE_QUALITY_HIGH}]),
 Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),
+  Image,
 F = fun(I, _) -> redraw(Image1,I) end,
 wxPanel:connect(Panel, paint, [{callback,F}]),
 %wxBitmap:destroy(Image1),

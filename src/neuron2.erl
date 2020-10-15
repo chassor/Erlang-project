@@ -69,7 +69,7 @@ state_name(_EventType, _EventContent, State = #neuron2_state{}) ->
   NextStateName = next_state,
   {next_state, NextStateName, State}.
 
-
+%%initialize state,the neuron wait for info from nn_agent
 initialize({call,From}, {NN_manger_PID,{Id,AF,Input_PIdPs,Output_PIds,Bias}}, State = #neuron2_state{}) ->
   NextStateName = idle,
   {next_state, NextStateName, State#neuron2_state{manger_pid = NN_manger_PID,outputPIds = Output_PIds, id=Id,af=AF,acc=0,inputPIDs2 =maps:from_list(Input_PIdPs) ,inputPIDs =maps:from_list(Input_PIdPs),bias = Bias},[{reply,From,ok}]};
@@ -81,8 +81,8 @@ initialize(_Message,_Type,State=#neuron2_state{})->
 
 
 
-%% idle when its sensor
-idle(cast,{insert_input,NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
+%% idle state when its sensor, wait for input
+idle(cast,{insert_input,_NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
   Out_PIds=State#neuron2_state.outputPIds,
   [gen_statem:cast(Pid,{State#neuron2_state.id,forward,W}) || Pid <- Out_PIds],
   {keep_state, State#neuron2_state{acc=W}};
@@ -96,6 +96,7 @@ idle(cast,{insert_input,NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
 %%  %[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
 %%  {next_state,wait,State#neuron2_state{acc=Acc+ToAdd,inputPIDs2 = maps:remove(From,In_PIds)}};
 
+%% idle state when its actuator or neuron, wait for input
 idle(cast,{From,forward,Input},State=#neuron2_state{})->
   In_PIds=State#neuron2_state.inputPIDs2,
   Acc=State#neuron2_state.acc,
@@ -108,7 +109,7 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
-        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
+        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
           gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
@@ -124,7 +125,10 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
 idle(EventType, EventContent, Data) ->
   handle_common(EventType, EventContent, Data).
 
-  %[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
+
+
+
+%%the neuron in the middle of processing info state
 in_process(cast,{From,forward,Input},State=#neuron2_state{})->
   In_PIds=State#neuron2_state.inputPIDs2,
   Acc=State#neuron2_state.acc,
@@ -137,7 +141,7 @@ in_process(cast,{From,forward,Input},State=#neuron2_state{})->
       Out_PIds=State#neuron2_state.outputPIds,
       K=State#neuron2_state.kind,
       case K of
-        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];%%% todo acuator,sensor
+        neuron->       [gen_statem:cast(Pid,{State#neuron2_state.id,forward,Result}) || Pid <- Out_PIds];
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
           gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
@@ -179,8 +183,9 @@ code_change(_OldVsn, StateName, State = #neuron2_state{}, _Extra) ->
 %%%===================================================================
 
 
-af(AccToAdd,AF) ->
 
+%%neuron commit calculate according to its activation func
+af(AccToAdd,AF) ->
 case AF of
 
  relu-> case AccToAdd > 0 of
@@ -201,40 +206,53 @@ end.
 
  %th:cos(AccToAdd).
 
+
+%% neuron reset
 handle_common(cast, {_XFrom,reset},State = #neuron2_state{}) ->
   deleteResults([]),
   {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs}};
 
-
+%% neuron reset
 handle_common({call,From}, {_XFrom,reset},State = #neuron2_state{}) ->
   deleteResults([]),
   {next_state,idle, State#neuron2_state{acc=0,inputPIDs2 = State#neuron2_state.inputPIDs},[{reply,From,ok}]};
 
+
+%% neuron update new out edge
 handle_common({call,From}, {_XFrom,new_neighbour_out,ID},State = #neuron2_state{}) ->
   L=State#neuron2_state.outputPIds,
  L2= L++[ID],
   {next_state,idle, State#neuron2_state{outputPIds = L2},[{reply,From,neighbour_out_added}]};
 
+
+%% neuron update new in edge
 handle_common({call,From}, {_XFrom,new_neighbour_in,{ID,Weight}},State = #neuron2_state{}) ->
   Map=State#neuron2_state.inputPIDs,
   Map2=maps:put(ID,Weight,Map),
   {next_state,idle, State#neuron2_state{inputPIDs = Map2,inputPIDs2 = Map2},[{reply,From,neighbour_in_added}]};
 
+
+%% neuron update new bias
 handle_common({call,From}, {_XFrom,newBias,NewBias},State = #neuron2_state{}) ->
   {next_state,idle, State#neuron2_state{bias = NewBias},[{reply,From,bias_changed}]};
 
+%% neuron update new weight in some edge
 handle_common({call,From}, {_XFrom,newWeight,{ID,Weight}},State = #neuron2_state{}) ->
   Map=State#neuron2_state.inputPIDs,
   Map2=maps:put(ID,Weight,Map),
   {next_state,idle, State#neuron2_state{inputPIDs = Map2,inputPIDs2 = Map2},[{reply,From,weight_added}]};
 
+
+
+%% neuron update new activation  func
 handle_common({call,From}, {_XFrom,newAF,NewAF},State = #neuron2_state{}) ->
   {next_state,idle, State#neuron2_state{af = NewAF},[{reply,From,af_changed}]}.
 
 
+%% flush mail box while reset
 deleteResults(L)->
   receive
-    {X,{From,forward,Result}}->deleteResults(L++[{From,result,Result}])
+    {_X,{From,forward,Result}}->deleteResults(L++[{From,result,Result}])
 
   after 0->L
   end.
