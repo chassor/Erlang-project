@@ -40,6 +40,8 @@ start_link() ->
 -spec(init(Args :: term()) ->
   {ok, State :: #master_state{}} | {ok, State :: #master_state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
+
+%% in this function the master start the gui and init the relevant record elements.
 init([]) ->
   %process_flag(trap_exit, true),
  {_A,_B,_C,D}=gui:start(node(),gui_nn,self()), %---------------> todo change back to this
@@ -67,11 +69,6 @@ init([]) ->
 %%  Inputs = generate_inputs(Sensors,[]),
 %%  Map = startChat(Nodes,maps:new(),self() ,Sensors ,Actuators,Layers, Neurons,AF,NN,Inputs),
 %%  {reply, ok, State#master_state{nodes_Map = Map}};
-
-
-
-
-
 handle_call(_Request, _From, State = #master_state{}) ->
   {reply, ok, State}.
 
@@ -87,16 +84,16 @@ handle_call(_Request, _From, State = #master_state{}) ->
 
 
 
-
-%%handle_cast(_Request, State = #master_state{}) ->
-%%  {noreply, State};
+%% in this case the master received the require values from the gui .
+%% the master check the connection to the remotes nodes and start the population on the nodes.
+%% in addition master spawn  buffer process ,and monitor process for catch failure.
+%% after population created in the require nodes the master update the maps and start the calculation of the networks on each node.
 
 handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State = #master_state{}) ->
   BufferPid=spawn(?MODULE,buffer,[]),
   HighScore=10000000000,
   PopulationID = list_to_atom(lists:flatten(io_lib:format("node~p", [?MODULE]))),
   io:format("master:im in the master start pops ~n"),
-  Num_of_live = num_of_alive_processes(),
   Inputs = generate_inputs(Sensors,[]),
   BB=length(atom_to_list(hd(Nodes))),
   if
@@ -137,10 +134,12 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
   end,
   {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid,monitorPid = MonitorPid,inputList = Inputs}};
 
+%% in this case the master received result from population , so if the result is better than the one that already received ,
+%% the best fitness ,result digraph  store and forward to buffer that forward it to the gui.
 handle_cast({Pop_name,new_gen_hit_me,Result,Processes}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid,inputList = Inputs,processes_Map = Processes_Map}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
   Processes_MapNew = maps:put(Pop_name,Processes,Processes_Map),
-  Number_of_processes = sum_processes(maps:values(Processes_MapNew),0),
+  Number_of_processes = lists:sum(maps:values(Processes_MapNew)),
   {NewScore,_,_,_} = Result,
   if
     NewScore < Score ->
@@ -156,6 +155,8 @@ handle_cast({Pop_name,new_gen_hit_me,Result,Processes}, State = #master_state{ h
   gen_statem:cast(Pid,{start_insert,Score2}),
   {noreply, State#master_state{highestScore = Score2}};
 
+
+%% in this case we get bad result from population so we start the networks again for more results.
 handle_cast({Pop_name,worst_result,Processes}, State = #master_state{nodes_Map = Nodes ,highestScore = H ,processes_Map = Processes_Map }) ->
 %io:format("master:in in worst_result cast from ~p ,start new iteration!! ~n" ,[Pop_name]),
   Processes_MapNew = maps:put(Pop_name,Processes,Processes_Map),
@@ -163,6 +164,7 @@ handle_cast({Pop_name,worst_result,Processes}, State = #master_state{nodes_Map =
 gen_statem:cast(Pid,{start_insert,H}),
 {noreply, State#master_state{processes_Map = Processes_MapNew}};
 
+%% in this case we take care of catch of node failure , remove him from maps.
 handle_cast({node_down,Node}, State = #master_state{nodes_Map = Nodes ,processes_Map = Processes_Map }) ->
   io:format("im in the node_down state in master!"),
   Key = find_key_by_valu(maps:to_list(Nodes),Node),
@@ -177,12 +179,11 @@ handle_cast({node_down,Node}, State = #master_state{nodes_Map = Nodes ,processes
   {noreply, State#master_state{nodes_Map = Nodes2 ,processes_Map = Processes_Map2 }};
 
 
-
+%% in this case we get stop from gui , so we kill monitor and buffer processes terminate nodes and update gui..
 handle_cast({stop},State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid,monitorPid = MonitorPid}) ->
   io:format("master:im in handle stop "),
   BufferPid ! kill,
   MonitorPid ! kill,
-  Num_of_live = num_of_alive_processes(),
   L = maps:to_list(Nodes),
   stopProcess(L),
   wx_object:cast(gui_nn,{finish_terminate}),
@@ -196,10 +197,11 @@ handle_cast({stop},State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid
   {noreply, NewState :: #master_state{}}|
 {noreply, NewState :: #master_state{}, timeout() | hibernate} |
 {stop, Reason :: term(), NewState :: #master_state{}}).
-handle_info({'EXIT',PID,normal}, State = #master_state{}) ->
+
+handle_info({'EXIT',_PID,normal}, State = #master_state{}) ->
   {noreply, State};
 
-handle_info({'EXIT',PID,_Reason}, State = #master_state{}) ->
+handle_info({'EXIT',_PID,_Reason}, State = #master_state{}) ->
   {noreply, State};
 
 handle_info(_Info, State = #master_state{}) ->
@@ -215,14 +217,14 @@ handle_info(_Info, State = #master_state{}) ->
 terminate(Reason, State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid,monitorPid = MonitorPid}) ->
   try
     BufferPid ! kill of
-    Result->ok
+    _Result->ok
   catch
     _:_->ok
    end,
 
       try
         MonitorPid ! kill of
-        Result2->ok
+        _Result2->ok
       catch
         _:_->ok
    end,
@@ -245,6 +247,8 @@ code_change(_OldVsn, State = #master_state{}, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+%% this function we start the population module in remote nodes by rpc call .
+%% if for some reason the rpc  unsuccessfully to nodes we return list of those nodes .
 startChat([],Map,BadList,_,_,_,_,_,_,_,_) -> {Map,BadList};
 
 startChat([Address|T],Map,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs ) ->
@@ -270,10 +274,7 @@ startChat([Address|T],Map,BadList,Main_PID ,SensorNum ,ActuatorNum,NumOfLayers, 
 
 
 
-generate_id() ->
-  {MegaSeconds,Seconds,MicroSeconds} = now(),
-  1/(MegaSeconds + Seconds + MicroSeconds).
-
+%% this function generate random list of inputs for the networks.
 generate_inputs(0,L)-> L;
 generate_inputs(N,L)->
   X = random_input(),
@@ -288,6 +289,11 @@ random_input()->
     2-> Y=-1*X
   end,
   Y.
+
+
+%% this function we check the connection to the another nodes by the net_kernel:connect_node ,
+%% if for some reason , the connection unsuccessfully to nodes we return list of those nodes .
+
 trytoconnect([],L)->
   if
     length(L) =:= 0 ->
@@ -305,16 +311,17 @@ trytoconnect([H|T],L) ->
           trytoconnect(T,L2)
   end.
 
+%% this function start the calculation of the networks.
 insert_cast([],_)->ok;
-insert_cast([{KEY,{_Node,Pid}}|T], Highest_score) ->
+insert_cast([{_KEY,{_Node,Pid}}|T], Highest_score) ->
   %io:format("master:start insert from master to ~p ~n" , [KEY]),
-  Answer=gen_statem:cast(Pid,{start_insert,Highest_score}),
+  gen_statem:cast(Pid,{start_insert,Highest_score}),
   %'node1@avnido-VirtualBox'
   %Answer=gen_statem:cast({global,KEY},{start_insert}),
   %io:format("master :cast to pop start insert to ~p , Answer is : ~p ~n" , [KEY,Answer]),
   insert_cast(T,Highest_score).
 
-
+%% this function check and received the number of live processes in the node.
 num_of_alive_processes() ->
   L5= processes(),
   L6=[is_process_alive(A)|| A<-L5],
@@ -324,7 +331,7 @@ num_of_alive_processes() ->
 
 
 
-
+%% this function terminates the population.
 stopProcess([])->ok;
 stopProcess([{_Name,{_Node,Pid}}|T])->
 
@@ -336,20 +343,11 @@ stopProcess([{_Name,{_Node,Pid}}|T])->
 
   end.
 
-
-deleteResults(L)->
-  receive
-    {X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
-
-  after 0->L
-  end.
-
-
+%% create bag in the program for failure check
 makeItCrash(N)->
   1/(1-rand:uniform(N)).
 
-
-
+%% this monitor loop catch nodes failure and update the master.
 monitor_loop(MainPid)->
   net_kernel:monitor_nodes(true),
   io:format("im in the monitor loop ~n"),
@@ -362,10 +360,11 @@ monitor_loop(MainPid)->
     kill -> out
   end.
 
+%% buffer of massages for delay and priority the massages that pass to the gui
 buffer()->
   receive
     kill->
-      A=gui:all_messages([]),
+     gui:all_messages([]),
       io:format("bufferkilld with messages"),
       ok;
 
@@ -377,19 +376,14 @@ buffer()->
 buffer2() ->
   receive
     kill->
-      A=gui:all_messages([]),
+      gui:all_messages([]),
       io:format("bufferkilld with messages"),
       ok
   after 1500-> buffer()
 
   end.
 
-sum_processes([],Sum)-> Sum;
-sum_processes([H|T],Sum)->
-  Sum2 = Sum + H,
-  sum_processes(T,Sum2).
-
-
+%% return Key associated with value
 find_key_by_valu([],_)->not_found;
 find_key_by_valu([H|T],Value)->
   {Key,Value2} = H,
