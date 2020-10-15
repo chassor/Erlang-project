@@ -10,7 +10,7 @@
 -author("chass").
 
 %% API
--export([generateGraph/1, createFrame/0, replaceImage/1, getEdgesList/1, getVerticesList/1]).
+-export([generateGraph/1, createFrame/2, replaceImage/3, getEdgesList/1, getVerticesList/1]).
 -include_lib("wx/include/wx.hrl").
 
 generateGraph({Vertices,Edges})->
@@ -153,61 +153,77 @@ creatMapOfNewNames([{B,{A,_B,_C,V,_R,_}}|T], Map,N) ->
 
 
 
-createFrame()->
+createFrame(Width,Height)->
   W = wx:new(),
-  Frame = wxFrame:new(W, -1, "result",[{size, {1400, 740}}]),
-  Panel = wxPanel:new(Frame,[{size, {1400, 700}}]),
-  Panel2 = wxPanel:new(Frame,[{size, {1400, 700}}]),
-
-%%  TextCtrlNeurons = wxTextCtrl:new(Frame, ?wxID_ANY,  [{value, "example:4 3 6 7"}]),
-%%Font = wxFont:new(20, ?wxFONTFAMILY_ROMAN, ?wxFONTSTYLE_NORMAL, ?wxFONTWEIGHT_NORMAL),
-%%  wxTextCtrl:setFont(TextCtrlNeurons, Font),
-%% % Label = wxStaticText:new(Frame, ?wxID_ANY, "neuron network"),
+  Frame = wxFrame:new(W, -1, "result",[{size, {Width, Height+150}}]),
+  Panel = wxPanel:new(Frame,[{size, {Width, Height}}]),
+  Panel2 = wxPanel:new(Frame,[{size, {Width, Height}}]),
   MainSizer = wxBoxSizer:new(?wxVERTICAL),
-%%wxWindow:setSizer(Frame, MainSizer),
-%%  wxSizer:add(MainSizer, TextCtrlNeurons, [{flag, ?wxALL bor ?wxALIGN_CENTRE}, {border,5}]),
-  Res_Label = wxStaticText:new(Panel, ?wxID_ANY, "results:", [{style, ?
-  wxALIGN_RIGHT}]),
-  wxStaticText:wrap(Res_Label,100),
-  Fit_Label = wxStaticText:new(Panel, ?wxID_ANY, "fitness:", [{style, ?
-  wxALIGN_RIGHT}]),
-  wxStaticText:wrap(Fit_Label,100),
-  Gen_Label = wxStaticText:new(Panel, ?wxID_ANY, "Gen:", [{style, ?wxDEFAULT}]),
-  wxStaticText:wrap(Gen_Label,100),
-  ResTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
-  wxTE_RIGHT}]),
-  FitTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
-  wxTE_RIGHT}]),
-  GenTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
-  wxTE_RIGHT}]),
   Font = wxFont:new(15, ?wxFONTFAMILY_DEFAULT, ?wxFONTSTYLE_NORMAL,?
   wxFONTWEIGHT_BOLD),
+
+
+
+  Res_Label = wxStaticText:new(Panel, ?wxID_ANY, "results:", [{style, ?wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Res_Label,100),
   wxTextCtrl:setFont(Res_Label, Font),
-  wxTextCtrl:setFont(Fit_Label, Font),
-  wxTextCtrl:setFont(Gen_Label, Font),
+  ResTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxTE_RIGHT}]),
   wxTextCtrl:setFont(ResTXT, Font),
   wxTextCtrl:setEditable(ResTXT, false),
+
+
+
+  Processes_Label = wxStaticText:new(Panel, ?wxID_ANY, "Processes:", [{style, ?wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Processes_Label,100),
+  wxTextCtrl:setFont(Processes_Label, Font),
+  ProcessesTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxTE_RIGHT}]),
+  wxTextCtrl:setFont(ProcessesTXT, Font),
+  wxTextCtrl:setEditable(ProcessesTXT, false),
+
+  Fit_Label = wxStaticText:new(Panel, ?wxID_ANY, "fitness:", [{style, ?wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Fit_Label,100),
+  wxTextCtrl:setFont(Fit_Label, Font),
+  FitTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxTE_RIGHT}]),
   wxTextCtrl:setFont(FitTXT, Font),
   wxTextCtrl:setEditable(FitTXT, false),
+  Gen_Label = wxStaticText:new(Panel, ?wxID_ANY, "Gen:", [{style, ?wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Gen_Label,100),
+  GenTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?wxTE_RIGHT}]),
+  wxTextCtrl:setFont(Gen_Label, Font),
   wxTextCtrl:setFont(GenTXT, Font),
   wxTextCtrl:setEditable(GenTXT, false),
+
+
+  Inp_Label = wxStaticText:new(Panel, ?wxID_ANY, "inputs:", [{style, ?wxALIGN_RIGHT}]),
+  wxStaticText:wrap(Inp_Label,100),
+  InpTXT = wxTextCtrl:new(Panel, ?wxID_ANY, [{value, "***************"}, {style, ?
+  wxTE_RIGHT}]),
+  wxTextCtrl:setFont(Inp_Label, Font),
+  wxTextCtrl:setFont(InpTXT, Font),
+  wxTextCtrl:setEditable(InpTXT, false),
+
+
   CounterSizer = wxBoxSizer:new(?wxHORIZONTAL),
-  wxSizer:add(CounterSizer, Res_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
-    {border, 5}]),
-  wxSizer:add(CounterSizer, ResTXT, [{proportion,5}, {flag, ?wxEXPAND bor ?
-  wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
-    {border, 5}]),
-  wxSizer:add(CounterSizer, FitTXT, [{proportion,2}, {flag, ?wxEXPAND bor ?
-  wxALL}, {border, 5}]),
-  wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxALL bor ?wxALIGN_CENTRE},
-    {border, 5}]),
-  wxSizer:add(CounterSizer, GenTXT, [{flag, ?wxEXPAND bor ?
-  wxALL}, {border, 5}]),
+  CounterSizer2 = wxBoxSizer:new(?wxHORIZONTAL),
+
+  wxSizer:add(CounterSizer, Fit_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, FitTXT,    [{proportion,7},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Gen_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, GenTXT,     [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, Processes_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer, ProcessesTXT,     [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, Res_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, ResTXT, [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, Inp_Label, [{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+  wxSizer:add(CounterSizer2, InpTXT, [{proportion,1},{flag, ?wxEXPAND bor ?wxALL}, {border, 5}]),
+
+
+
   wxSizer:add(MainSizer, CounterSizer, [{flag, ?wxEXPAND}]),
+  wxSizer:add(MainSizer, CounterSizer2, [{flag, ?wxEXPAND}]),
   wxSizer:add(MainSizer,Panel2, [{flag, ?wxEXPAND}]),
   wxWindow:setSizer(Frame, MainSizer),
-  wxSizer:setSizeHints(MainSizer, Frame),
+  %wxSizer:setSizeHints(MainSizer, Panel),
   wxWindow:setMinSize(Frame, wxWindow:getSize(Frame)),
   wxWindow:setMaxSize(Frame, wxWindow:getSize(Frame)),
   Vbox = wxBoxSizer:new(?wxVERTICAL),
@@ -219,22 +235,22 @@ createFrame()->
 
   %PictureDrawScaled = wxImage:scale(PictureDraw, 1280, 720,[{quality,?wxIMAGE_QUALITY_HIGH}]),
   wxFrame:show(Frame),
-  {Frame,Panel2,ResTXT,FitTXT,GenTXT}.
+  {Frame,Panel2,ResTXT,FitTXT,GenTXT,ProcessesTXT,InpTXT}.
 
 
 
-replaceImage(Panel) ->
+replaceImage(Panel,Width,Height) ->
 PictureDraw1 = wxImage:new("dor.png"),
-PictureDraw=wxImage:rescale(PictureDraw1,1400,700,[{quality,?wxIMAGE_QUALITY_HIGH}]),
+PictureDraw=wxImage:rescale(PictureDraw1,Width,Height,[{quality,?wxIMAGE_QUALITY_HIGH}]),
 Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),
 F = fun(I, _) -> redraw(Image1,I) end,
 wxPanel:connect(Panel, paint, [{callback,F}]),
-  %wxBitmap:destroy(Image1),
- % wxStaticBitmap:destroy(Image),
- % wxImage:destroy(PictureDraw1),
+%wxBitmap:destroy(Image1),
+% wxStaticBitmap:destroy(Image),
+% wxImage:destroy(PictureDraw1),
 % wxWindow:refresh(Panel,[{eraseBackground,false}]),
-  Panel.
+Panel.
 
 redraw(Image, #wx{obj=Panel}) ->
   DC = wxBufferedPaintDC:new(Panel),

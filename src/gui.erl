@@ -4,7 +4,7 @@
 -export([start/3, init/1, handle_event/2, handle_info/2, handle_call/3, handle_cast/2, code_change/3, terminate/2, all_messages/1]).
 -include_lib("wx/include/wx.hrl").
 -define(SERVER,?MODULE).
--record(state, {clicked, activation_function, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT ,re_insert_nodes_click}).
+-record(state, {clicked, neurons,layers,sensors,actuators,nn,frame,panel,log , main_pid , button , image , node,pic_frame,pic_panel,flag,resTXT,fitTXT,genTXT ,re_insert_nodes_click,width,height,fitnessChoice,resChoices,processTXT,inputTXT}).
 
 start(Node,Name,Pid) ->
   wx_object:start_link({local,Name},?MODULE,[global,Node,Pid],[]).
@@ -19,16 +19,22 @@ init([Mode,Node,Pid]) ->
 
 initiation(_Mode,_Node,Pid) ->
   wx:new(),
-  Choices = ["ReLU","tanh","Binary step","Sin"], %supported algorithms
+  FitnessChoices = ["go to \pi","go to e","fitness func1","fitness func2"], %supported algorithms
+  ResolutionChoices = ["500x1000","600x1200","700x1400","800x1600"],
+
   GParent = wxWindow:new(),
-  Parent = wxFrame:new(GParent, 1, "neuroevolution gui" ,[{size,{600, 600}}]), %create frame
+  Parent = wxFrame:new(GParent, 1, "neuroevolution gui" ,[{size,{600, 700}}]), %create frame
   Panel = wxPanel:new(Parent, []), %create panel
 
   %% Setup sizer
+  
+  
   FirstNodeSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "insert Nodes (separated by ',')"}]),
 
   MainSizer = wxBoxSizer:new(?wxVERTICAL),
+  ChoicePickerSizerRes = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
+    [{label, "Choose simaltion resolution"}]),
   ChoicePickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "Choose activation function algorithm"}]),
   LayersPickerSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
@@ -45,12 +51,13 @@ initiation(_Mode,_Node,Pid) ->
     [{label, " start Neuroevolution calculation"}]),
   LogSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
     [{label, "log"}]),
-  Nodes  = wxTextCtrl:new(Panel, 5, [{value, "node1@avnido-VirtulBox"},
+  Nodes  = wxTextCtrl:new(Panel, 5, [{value, "nonode@nohost"},
     {style, ?wxDEFAULT}]),
 
 
 
-  Choice = wxListBox:new(Panel, 7, [{choices, Choices}]),
+  Choice = wxListBox:new(Panel, 7, [{choices, FitnessChoices}]),
+  Choice2 = wxListBox:new(Panel, 7, [{choices, ResolutionChoices}]),
   LayersPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(LayersPicker, 2, 1000),
   NeuronsPicker = wxSpinCtrl:new(Panel, []),
@@ -60,7 +67,7 @@ initiation(_Mode,_Node,Pid) ->
   ActuatorsPicker = wxSpinCtrl:new(Panel, []),
   wxSpinCtrl:setRange(ActuatorsPicker, 2, 1000),
   NetworksPicker = wxSpinCtrl:new(Panel, []),
-  wxSpinCtrl:setRange(NetworksPicker, 2, 250),
+  wxSpinCtrl:setRange(NetworksPicker, 2, 1000),
   ButtonPicker = wxButton:new(Panel, 10, [{label, "press to start"}]),
   Log = wxTextCtrl:new(Panel, 7, [{value, "insert initial values for networs please :) "},
     {style, ?wxDEFAULT}]),
@@ -73,6 +80,7 @@ initiation(_Mode,_Node,Pid) ->
 
   %% Add to sizer
   PickerOptions = [{border, 1},{flag, ?wxALL bor ?wxEXPAND}],
+
   wxSizer:add(LayersPickerSizer, LayersPicker, PickerOptions),
   wxSizer:add(NeuronsPickerSizer, NeuronsPicker, PickerOptions),
   wxSizer:add(SensorsPickerSizer, SensorsPicker, PickerOptions),
@@ -81,12 +89,18 @@ initiation(_Mode,_Node,Pid) ->
   wxSizer:add(ButtonPickerSizer, ButtonPicker, PickerOptions),
   wxSizer:add(LogSizer, Log, PickerOptions),
   wxSizer:add(FirstNodeSizer, Nodes, PickerOptions),
-
   wxSizer:add(ChoicePickerSizer, Choice, PickerOptions),
+  wxSizer:add(ChoicePickerSizerRes, Choice2, PickerOptions),
+
+  ChoicesSizer = wxStaticBoxSizer:new(?wxHORIZONTAL,Panel),
+%%  ChoicesSizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
+%%    [{label, "insert Nodes (separated by ',')"}]),
 
 
   SizerOptions  = [{flag, ?wxEXPAND}],
+  wxSizer:add(MainSizer, ChoicePickerSizerRes, [{border, 10},{flag, ?wxTOP bor ?wxEXPAND}]),
   wxSizer:add(MainSizer, ChoicePickerSizer, SizerOptions),
+ % wxSizer:add(MainSizer, ChoicesSizer, SizerOptions),
   wxSizer:add(MainSizer, LayersPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, NeuronsPickerSizer, SizerOptions),
   wxSizer:add(MainSizer, SensorsPickerSizer, SizerOptions),
@@ -98,7 +112,7 @@ initiation(_Mode,_Node,Pid) ->
 
   wxPanel:setSizer(Panel, MainSizer),
    wxFrame:show(Parent),
-  {Frame2,Panel2,ResTXT,FitTXT,GenTXT}=toGraph:createFrame(),
+
    W= wx:new(),
 
 
@@ -106,7 +120,8 @@ initiation(_Mode,_Node,Pid) ->
        clicked=0,
        flag = run,
        re_insert_nodes_click = false,
-       activation_function=Choice,
+       fitnessChoice =Choice,
+       resChoices = Choice2,
        neurons=NeuronsPicker,
        layers=LayersPicker,
        sensors=SensorsPicker,
@@ -114,16 +129,14 @@ initiation(_Mode,_Node,Pid) ->
        nn = NetworksPicker,
        frame=Parent,
        log=Log,
-       resTXT =  ResTXT,
-       fitTXT = FitTXT,
-       genTXT = GenTXT,
+
        button = ButtonPicker,
        image = W,
        node = Nodes,
        panel=Panel,
      main_pid = Pid,
-       pic_frame = Frame2,
-       pic_panel = Panel2}.
+       height = 0,
+     width = 0}.
 
 
 
@@ -132,10 +145,11 @@ initiation(_Mode,_Node,Pid) ->
 
 
 
-handle_event(W=#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
+handle_event(We=#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}},
     State = #state{
-      activation_function=Choice,
-      neurons=NeuronsP,
+      fitnessChoice =FitChoice,
+      resChoices = ResChoice,
+      neurons=NeuronsP,height = H,width = W,
       layers=LayersP,
       sensors=SensorsP,
       actuators=ActuatorsP,
@@ -148,6 +162,7 @@ handle_event(W=#wx{obj = _Button, event = #wxCommand{type = command_button_click
       node = Node,
       re_insert_nodes_click = Nodes_Click,
       clicked=Click,
+      pic_frame = PrevFrame,
       flag=run}) ->
       L3=string:split(wxTextCtrl:getValue(Node),",",all),
       Nodes_List=[list_to_atom(A)||A<-L3],
@@ -164,25 +179,41 @@ handle_event(W=#wx{obj = _Button, event = #wxCommand{type = command_button_click
           Sensors = wxSpinCtrl:getValue(SensorsP), %get the Sensors
           Actuators = wxSpinCtrl:getValue(ActuatorsP), %get the Actuators
            NN = wxSpinCtrl:getValue(NNP), %get the nn number
-         ReLU=wxListBox:isSelected(Choice,0), %check if the user chose ReLU as the algorithm
-         Tanh =wxListBox:isSelected(Choice,1), %check if the user chose Tanh as the algorithm
-         Binary_step =wxListBox:isSelected(Choice,2), %check if the user chose Binary_step as the algorithm
-         Sin =wxListBox:isSelected(Choice,3), %check if the user chose Sigmoid as the algorithm
-          AF = coosen_AF(ReLU,Tanh,Binary_step,Sin),
 
-          if
-            AF =:= empty -> AF2 = relu;
-            true -> AF2 = AF
-          end,
+           Fitness=chooseFitness(FitChoice),
+            {Height,Width}=chooseRes(ResChoice),
+
+
+
+
+
+
+
+
+
           %io:format("i'm in the start gui case ~n ",[]),
-          A=gen_server:cast(Pid,{start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes_List}),%todo change to nodes list
+          A=gen_server:cast(Pid,{start,Sensors ,Actuators ,Layers,  Neurons ,Fitness ,NN,Nodes_List}),%todo change to nodes list
    %      {Pimaind ! {start,self() ,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN}},
           wxTextCtrl:changeValue(Log, ""),
         %run_nn(self()  ,Sensors  ,Actuators  ,Layers ,  Neurons   ,AF  ,Num_Of_NN_AGENTS ,Inputs,PopulationID),
          Click2 = 1 ,
             wxButton:setLabel(B,"building neural network"),
             wxButton:disable(B),
-            wxPanel:refresh(Parent); %refresh the panel
+            wxPanel:refresh(Parent), %refresh the panel
+
+            if
+              {H,W}=/={Height,Width}->
+                if
+                  H>0 ->wxFrame:destroy(PrevFrame) ;
+                  true -> ok
+                end
+                ,
+                {Frame2,Panel2,ResTXT,FitTXT,GenTXT,ProcessesTXT,InpTXT}=toGraph:createFrame(Width,Height),
+                wxFrame:connect(Frame2,close_window),
+                {noreply, State#state{clicked=Click2 , flag = Flag2,resTXT =  ResTXT, fitTXT = FitTXT,genTXT = GenTXT, pic_frame = Frame2, pic_panel = Panel2,width = Width, height  = Height
+                ,inputTXT = InpTXT,processTXT = InpTXT}};
+              true-> {noreply, State#state{clicked=Click2 , flag = Flag2}}
+            end ;
 
     true ->
       Flag2 = stop,
@@ -193,22 +224,33 @@ handle_event(W=#wx{obj = _Button, event = #wxCommand{type = command_button_click
       wxButton:setLabel(B,"please wait"),
       wxTextCtrl:changeValue(Log, "closing simulation"),
 
-      wxPanel:refresh(Parent) %refresh the panel
+      wxPanel:refresh(Parent), %refresh the panel
+      {noreply, State#state{clicked=Click2 , flag = Flag2}}
+  end;
+
+
+
+
+handle_event(W=#wx{event = #wxClose{},obj = {_,FrameID,_,_}}, %close window event, handle memory leak
+    State = #state{ frame=Frame={_,FrameID,_,_} , panel=_Panel ,pic_frame  = Frame2,main_pid = Pid}) ->
+  gen_server:stop(Pid),
+  wxFrame:destroy(Frame),
+  if
+    Frame2=/=undefined->  wxFrame:destroy(Frame2);
+    true ->ok
   end,
 
-  {noreply, State#state{clicked=Click2 , flag = Flag2}};
-
-
-
-
-
-handle_event(#wx{event = #wxClose{}}, %close window event, handle memory leak
-    State = #state{ frame=Frame , panel=_Panel ,pic_frame  = Frame2
-    }) ->
-  wxFrame:destroy(Frame),
-  wxFrame:destroy(Frame2),
   io:format("exit~n"),
   {stop,normal,State};
+
+
+
+handle_event(W=#wx{event = #wxClose{},obj = {_,FrameID,_,_}}, %close window event, handle memory leak
+    State = #state{ panel=_Panel ,pic_frame  = {_,FrameID,_,_}}) ->
+%%  M = wxMessageDialog:new(wx:null(),"please stop the simulation by using the main menu button"),
+%%  wxMessageDialog:showModal(M),
+  {noreply,State};
+
 
 handle_event(_Ev = #wx{}, State = #state{}) ->
   io:format("Got Event ~n"),
@@ -227,21 +269,25 @@ handle_call(_Request, _From, State) ->
 
 %%#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}
 
-handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,pic_frame = Frame2 }) ->
+handle_cast({done,{Outputs,InPuts}} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,
+  pic_frame = Frame2, width = W,height =H,inputTXT = InputTXT,processTXT = ProcessesTXT }) ->
 % X=#wx{obj = _Button, event = _Type},
   if
       Flag =:= run ->
       {Fitness,Result,G,Generation} = Outputs,
       Result1=shortcut(Result,[]),
+        Input1=shortcut(InPuts,[]),
+
         try
         toGraph:generateGraph(G) of
           _No_error->
 
-            toGraph:replaceImage(State#state.pic_panel),
+            toGraph:replaceImage(State#state.pic_panel,W,H),
             %wxTextCtrl:changeValue(Log, ""), %clean the log
              wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
             wxTextCtrl:changeValue(GenTxT, lists:flatten(io_lib:format("~p", [Generation]))),
+            wxTextCtrl:changeValue(InputTXT, lists:flatten(io_lib:format("~p", [Input1]))),
             %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(Log,"network in simulation"),
             wxButton:setLabel(B,"press to terminate network"),
@@ -249,7 +295,8 @@ handle_cast({done,Outputs} ,State = #state{frame = Frame,log = Log , flag = Flag
             wxPanel:refresh(Frame), %refresh the panel
             wxPanel:refresh(FitTXT),
             wxPanel:refresh(ResultTxT),
-            wxPanel:refresh(GenTxT)
+            wxPanel:refresh(GenTxT),
+            wxPanel:refresh(InputTXT)
          %   timer:sleep(2000)
         catch
           _Reason:_Reason1-> io:format("gui: error get to G because he located in another node ~n but the Fitness is ~p , and network generation is ~p ~n",[Fitness,Generation])
@@ -322,16 +369,10 @@ code_change(_, _, State) ->
   {stop, ignore, State}.
 
 terminate(_Reason, _) ->
+  io:format("gui terminated"),
   ok.
 
-coosen_AF(ReLU,Tanh,Binary_step,Sin)->
-  if
-    ReLU==true -> relu;
-    Tanh==true -> tanh;
-    Binary_step==true -> bin;
-    Sin==true -> sin;
-    true ->empty
-  end.
+
 
 to_file(Graph, File, Format) ->
   {A1,A2,A3} = now(),
@@ -437,3 +478,33 @@ terminating_func(N,Parent,B) ->
   wxPanel:refresh(Parent), %refresh the panel
   timer:sleep(1000),
   terminating_func(N-1,Parent,B).
+
+chooseFitness(FitChoice) ->
+    X= wxListBox:isSelected(FitChoice,0),
+    Y=   wxListBox:isSelected(FitChoice,1),
+    Z=   wxListBox:isSelected(FitChoice,2),
+    W=    wxListBox:isSelected(FitChoice,3),
+
+  if
+      X=:=true->go_to_pi;
+      Y =:=true ->go_to_e;
+      Z=:=true ->go_to_pi;
+      W=:=true->go_to_pi;
+      true->go_to_pi
+
+  end.
+
+chooseRes(ResChoice) ->
+  X=   wxListBox:isSelected(ResChoice,0),
+  Y=   wxListBox:isSelected(ResChoice,1),
+  Z=   wxListBox:isSelected(ResChoice,2),
+  W=   wxListBox:isSelected(ResChoice,3),
+
+  if
+    X=:=true-> {500,1000};
+    Y =:=true ->{600,1200};
+    Z=:=true ->{700,1400};
+    W=:=true->{800,1600};
+    true->{700,1400}
+
+  end.

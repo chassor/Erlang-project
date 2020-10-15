@@ -20,7 +20,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid,monitorPid}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid,monitorPid,inputList}).
 
 %%%===================================================================
 %%% API
@@ -45,7 +45,7 @@ init([]) ->
  {_A,_B,_C,D}=gui:start(node(),gui_nn,self()), %---------------> todo change back to this
   io:format("starting the gui with pid ~p ~n",[D]),
 
-  {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000}}.
+  {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000,nodes_Map = maps:new()}}.
 
 %% @private
 %% @doc Handling call messages
@@ -135,9 +135,9 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       wx_object:cast(gui_nn,{insert_nodes_again , List})
   end
   end,
-  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid,monitorPid = MonitorPid}};
+  {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid,monitorPid = MonitorPid,inputList = Inputs}};
 
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid}) ->
+handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid,inputList = Inputs}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
   {NewScore,_,_,_} = Result,
   if
@@ -145,7 +145,7 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
       Score2 = NewScore,
      % timer:sleep(2000),
    %   wx_object:cast(gui_nn,{done,Result}) ;
-     BufferPid! {done,Result};
+     BufferPid! {done,{Result,Inputs}};
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
   end,
@@ -196,7 +196,24 @@ handle_info(_Info, State = #master_state{}) ->
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #master_state{}) -> term()).
-terminate(Reason, State = #master_state{}) ->
+terminate(Reason, State = #master_state{nodes_Map = Nodes,bufferPid = BufferPid,monitorPid = MonitorPid}) ->
+  try
+    BufferPid ! kill of
+    Result->ok
+  catch
+    _:_->ok
+   end,
+
+      try
+        MonitorPid ! kill of
+        Result2->ok
+      catch
+        _:_->ok
+   end,
+
+  L = maps:to_list(Nodes),
+  stopProcess(L),
+  %wx_object:stop(gui_nn),
   io:format("master terminate ~p ~p ~n",[Reason,State]),
   ok.
 

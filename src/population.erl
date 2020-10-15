@@ -13,7 +13,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,af,nn_pids_map,nn_pids_map2, finesses_Map , inputs ,highest_score,generation_Map}).
+-record(population_state, {id,num_of_nn,main_PID,sensorNum,actuatorNum,numOfLayers,numOfNeuronsEachLayer,fitnessFunc,nn_pids_map,nn_pids_map2, finesses_Map , inputs ,highest_score,generation_Map}).
 
 %%%===================================================================
 %%% API
@@ -34,7 +34,7 @@ start_link(Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,N
 %% @doc Whenever a gen_statem is started using gen_statem:start/[3,4] or
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
-init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of_NN_AGENTS,Inputs,ID}) ->
+init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer, Fit,Num_Of_NN_AGENTS,Inputs,ID}) ->
  %process_flag(trap_exit, true),
  Y2= global:register_name(ID,self()),
  io:format(" pop: im in pop , my id is : ~p ~n" , [ID]),
@@ -47,7 +47,7 @@ init({Main_PID,SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,AF,Num_Of
     numOfLayers = NumOfLayers,
     numOfNeuronsEachLayer = NumOfNeuronsEachLayer,
     sensorNum = SensorNum,
-    af = AF,
+    fitnessFunc = Fit,
     highest_score = 1000000000,
     finesses_Map = maps:new()},
   {PIMap,GeMAp}=create_NN_Agents(Num_Of_NN_AGENTS,maps:new(),maps:new(),State),
@@ -92,11 +92,11 @@ state_name(_EventType, _EventContent, State = #population_state{}) ->
 
 
 
-network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map})->
+network_in_computation(cast,{KEY,result,NN_Result},State = #population_state{id = Id , main_PID = MainPid ,highest_score = Score , finesses_Map = FitnessMap,generation_Map = Generation_map,fitnessFunc = Fit})->
  % io:format("pop: im in node1 network_in_computation state ~n"),
 
   %io:format("~p  number of processes ~p --------------~n",[Id,master:num_of_alive_processes()]),
-Fitness = calcFitness(NN_Result,go_to_pi),
+Fitness = calcFitness(NN_Result,Fit),
 UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
   Counter = maps:remove(KEY,State#population_state.nn_pids_map2),
  % io:format("MAP1 =~p ~n",[maps:keys(State#population_state.nn_pids_map)]),
@@ -339,10 +339,16 @@ fitness([H|T],Sum)->
 
 calcFitness(NNResult, Fitness) ->
 case Fitness of
-  go_to_pi->goToPi(NNResult,0)
+  go_to_pi->goToPi(NNResult,0);
+  go_to_e->goToE(NNResult,0,math:exp(1))
 
 end
 .
 goToPi([],Sum)->Sum;
 goToPi([H|T], Sum) ->
   goToPi(T,Sum+abs(math:pi()-H)).
+
+
+goToE([],Sum,_)->Sum;
+goToE([H|T], Sum,E) ->
+  goToE(T,Sum+abs(E-H),E).
