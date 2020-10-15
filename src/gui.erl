@@ -211,7 +211,7 @@ handle_event(We=#wx{obj = _Button, event = #wxCommand{type = command_button_clic
                 {Frame2,Panel2,ResTXT,FitTXT,GenTXT,ProcessesTXT,InpTXT}=toGraph:createFrame(Width,Height),
                 wxFrame:connect(Frame2,close_window),
                 {noreply, State#state{clicked=Click2 , flag = Flag2,resTXT =  ResTXT, fitTXT = FitTXT,genTXT = GenTXT, pic_frame = Frame2, pic_panel = Panel2,width = Width, height  = Height
-                ,inputTXT = InpTXT,processTXT = InpTXT}};
+                ,inputTXT = InpTXT,processTXT = ProcessesTXT}};
               true-> {noreply, State#state{clicked=Click2 , flag = Flag2}}
             end ;
 
@@ -269,7 +269,7 @@ handle_call(_Request, _From, State) ->
 
 %%#wx{obj = _Button, event = #wxCommand{type = command_button_clicked}
 
-handle_cast({done,{Outputs,InPuts}} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,
+handle_cast({done,{Outputs,InPuts},Num_of_processes} ,State = #state{frame = Frame,log = Log , flag = Flag,button = B , fitTXT = FitTXT , resTXT = ResultTxT , genTXT = GenTxT ,
   pic_frame = Frame2, width = W,height =H,inputTXT = InputTXT,processTXT = ProcessesTXT }) ->
 % X=#wx{obj = _Button, event = _Type},
   if
@@ -287,6 +287,7 @@ handle_cast({done,{Outputs,InPuts}} ,State = #state{frame = Frame,log = Log , fl
              wxTextCtrl:changeValue(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(ResultTxT, lists:flatten(io_lib:format("~p", [Result1]))),
             wxTextCtrl:changeValue(GenTxT, lists:flatten(io_lib:format("~p", [Generation]))),
+            wxTextCtrl:changeValue(ProcessesTXT, lists:flatten(io_lib:format("~p", [Num_of_processes]))),
             wxTextCtrl:changeValue(InputTXT, lists:flatten(io_lib:format("~p", [Input1]))),
             %wxTextCtrl:writeText(FitTXT, lists:flatten(io_lib:format("~p", [Fitness]))),
             wxTextCtrl:changeValue(Log,"network in simulation"),
@@ -296,7 +297,8 @@ handle_cast({done,{Outputs,InPuts}} ,State = #state{frame = Frame,log = Log , fl
             wxPanel:refresh(FitTXT),
             wxPanel:refresh(ResultTxT),
             wxPanel:refresh(GenTxT),
-            wxPanel:refresh(InputTXT)
+            wxPanel:refresh(InputTXT),
+            wxPanel:refresh(ProcessesTXT)
          %   timer:sleep(2000)
         catch
           _Reason:_Reason1-> io:format("gui: error get to G because he located in another node ~n but the Fitness is ~p , and network generation is ~p ~n",[Fitness,Generation])

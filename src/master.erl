@@ -16,11 +16,11 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3, num_of_alive_processes/0,monitor_loop/0]).
+  code_change/3, num_of_alive_processes/0,monitor_loop/1]).
 
 -define(SERVER, ?MODULE).
 
--record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid,monitorPid,inputList}).
+-record(master_state, {result_Tuple ,nodes_Map,guiPid,guiName,highestScore,first_run,bufferPid,monitorPid,inputList,processes_Map}).
 
 %%%===================================================================
 %%% API
@@ -45,7 +45,7 @@ init([]) ->
  {_A,_B,_C,D}=gui:start(node(),gui_nn,self()), %---------------> todo change back to this
   io:format("starting the gui with pid ~p ~n",[D]),
 
-  {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000,nodes_Map = maps:new()}}.
+  {ok, #master_state{guiName =gui_nn,guiPid = D  , highestScore = 1000000000,nodes_Map = maps:new() ,processes_Map = maps:new()}}.
 
 %% @private
 %% @doc Handling call messages
@@ -105,7 +105,7 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       MapE = maps:put(PopulationID,{node(),Pid} ,maps:new()) ,
       A=insert_cast(maps:to_list(MapE),HighScore),
       io:format("~p ~n",[A]),
-      MonitorPid = spawn(?MODULE,monitor_loop,[]);
+      MonitorPid = spawn(?MODULE,monitor_loop,[self()]);
     true ->
      {Boolean,List} = trytoconnect(Nodes,[]),
       %{Boolean,List} = {true,[]},
@@ -114,7 +114,7 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
       {Map,Bad_Connection_node_list} = startChat(Nodes,maps:new(),[],self() ,Sensors ,Actuators,Layers, Neurons,AF2,NN,Inputs),
       if   % case of god connections to nodes!
         length(Bad_Connection_node_list) =:= 0 ->
-          MonitorPid = spawn(?MODULE,monitor_loop,[]),
+          MonitorPid = spawn(?MODULE,monitor_loop,[self()]),
           io:format("pawn(master,monitor_loop,[]), answer is: ~p ~n",[MonitorPid]),
           Pid = population:start_link(self(),Sensors,Actuators,Layers,Neurons,AF2,NN,Inputs,PopulationID),
           MapE = maps:put(PopulationID,{node(),Pid} ,Map) ,
@@ -137,15 +137,17 @@ handle_cast({start,Sensors ,Actuators ,Layers,  Neurons ,AF2 ,NN,Nodes}, State =
   end,
   {noreply, State#master_state{nodes_Map = MapE, highestScore = HighScore,bufferPid = BufferPid,monitorPid = MonitorPid,inputList = Inputs}};
 
-handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid,inputList = Inputs}) ->
+handle_cast({Pop_name,new_gen_hit_me,Result,Processes}, State = #master_state{ highestScore = Score ,nodes_Map = Nodes,bufferPid = BufferPid,inputList = Inputs,processes_Map = Processes_Map}) ->
 %%  io:format("master:in in new gen hit me cast from ~p in master with result : ~p ~n" ,[Pop_name,Result]),
+  Processes_MapNew = maps:put(Pop_name,Processes,Processes_Map),
+  Number_of_processes = sum_processes(maps:values(Processes_MapNew),0),
   {NewScore,_,_,_} = Result,
   if
     NewScore < Score ->
       Score2 = NewScore,
      % timer:sleep(2000),
    %   wx_object:cast(gui_nn,{done,Result}) ;
-     BufferPid! {done,{Result,Inputs}};
+     BufferPid! {done,{Result,Inputs},Number_of_processes};
       %io:format("master:ending result for gui from ~p , the result : ~p ~n" ,[Pop_name,NewScore]);
     true -> Score2 = Score
   end,
@@ -154,11 +156,25 @@ handle_cast({Pop_name,new_gen_hit_me,Result}, State = #master_state{ highestScor
   gen_statem:cast(Pid,{start_insert,Score2}),
   {noreply, State#master_state{highestScore = Score2}};
 
-handle_cast({Pop_name,worst_result}, State = #master_state{nodes_Map = Nodes ,highestScore = H}) ->
+handle_cast({Pop_name,worst_result,Processes}, State = #master_state{nodes_Map = Nodes ,highestScore = H ,processes_Map = Processes_Map }) ->
 %io:format("master:in in worst_result cast from ~p ,start new iteration!! ~n" ,[Pop_name]),
+  Processes_MapNew = maps:put(Pop_name,Processes,Processes_Map),
 {_Node,Pid} = maps:get(Pop_name,Nodes),
 gen_statem:cast(Pid,{start_insert,H}),
-{noreply, State#master_state{}};
+{noreply, State#master_state{processes_Map = Processes_MapNew}};
+
+handle_cast({node_down,Node}, State = #master_state{nodes_Map = Nodes ,processes_Map = Processes_Map }) ->
+  io:format("im in the node_down state in master!"),
+  Key = find_key_by_valu(maps:to_list(Nodes),Node),
+  if
+    Key =/= not_found ->
+      Nodes2 = maps:remove(Key,Nodes),
+      Processes_Map2 = maps:remove(Key,Processes_Map);
+    true ->
+      Nodes2 = Nodes,
+      Processes_Map2 = Processes_Map
+  end,
+  {noreply, State#master_state{nodes_Map = Nodes2 ,processes_Map = Processes_Map2 }};
 
 
 
@@ -334,14 +350,15 @@ makeItCrash(N)->
 
 
 
-monitor_loop()->
+monitor_loop(MainPid)->
   net_kernel:monitor_nodes(true),
   io:format("im in the monitor loop ~n"),
   receive
     {Message, Node} ->
       io:format("im in the monitor loop got a message: ~p from ~p  ~n",[Message,Node]),
-     wx_object:cast(gui_nn,{node_down,Message,Node}),
-      monitor_loop();
+      gen_server:cast(MainPid,{node_down,Node}),
+      wx_object:cast(gui_nn,{node_down,Message,Node}),
+      monitor_loop(MainPid);
     kill -> out
   end.
 
@@ -352,7 +369,7 @@ buffer()->
       io:format("bufferkilld with messages"),
       ok;
 
-    {done,Result}-> wx_object:cast(gui_nn,{done,Result}),
+    {done,Result,Num_of_processes}-> wx_object:cast(gui_nn,{done,Result,Num_of_processes}),
       io:format("buffer sent result ~n"),
       buffer2()
   end.
@@ -365,4 +382,18 @@ buffer2() ->
       ok
   after 1500-> buffer()
 
+  end.
+
+sum_processes([],Sum)-> Sum;
+sum_processes([H|T],Sum)->
+  Sum2 = Sum + H,
+  sum_processes(T,Sum2).
+
+
+find_key_by_valu([],_)->not_found;
+find_key_by_valu([H|T],Value)->
+  {Key,Value2} = H,
+  if
+    Value2 =:= Value -> Key;
+    true -> find_key_by_valu(T,Value)
   end.

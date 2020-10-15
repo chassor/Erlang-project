@@ -122,14 +122,15 @@ UpdateFitnessMap = maps:put(KEY,{Fitness,NN_Result},FitnessMap),
       %Keys_good_map=maps:without(maps:keys(Map2),Map3),
       MangerPid=State#population_state.main_PID,
       FitnessMap3=update_fitness_map(UpdateFitnessMap,WorstNN),
+       Processes = master:num_of_alive_processes(),
       %MangerPid ! {self(),new_gen_hit_me,Result_for_master},
   %     io:format("going to cast master ~n"),
        if
          Best_Fitness_of_this_iteration < Score ->
-          gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master}) ;
+          gen_server:cast(MainPid,{Id,new_gen_hit_me,Result_for_master,Processes}) ;
            true ->
     %         io:format(" best score is: ~p ,get low score : ~p so  pop dont sending to master result! ~n",[Score,Best_Fitness_of_this_iteration]),
-             gen_server:cast(MainPid,{Id,worst_result})
+             gen_server:cast(MainPid,{Id,worst_result,Processes})
 
        end,
 
