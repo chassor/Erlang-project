@@ -76,8 +76,8 @@ state_name(_EventType, _EventContent, State = #nn_agent_state{}) ->
 
 
 
-
-idle(cast, {From,insert_input,InputList}, State = #nn_agent_state{result_list = ResList}) ->
+%% idle state waiting for insert result
+idle(cast, {_From,insert_input,InputList}, State = #nn_agent_state{result_list = ResList}) ->
   if
     is_atom(ResList) =/=true-> gen_statem:cast(State#nn_agent_state.manger_pid,{State#nn_agent_state.id,result,ResList}),
     {keep_state, State};
@@ -95,6 +95,8 @@ idle(EventType, EventContent, Data) ->
   A=handle_common(EventType, EventContent, Data,idle),
 A.
 
+
+%% wait to result from the actuators
 wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
   Act_PIds=State#nn_agent_state.actuator_list2,
   {_,ID}=maps:get(From,Act_PIds),
@@ -130,6 +132,8 @@ handle_event(_EventType, _EventContent, _StateName, State = #nn_agent_state{}) -
   NextStateName = the_next_state_name,
   {next_state, NextStateName, State}.
 
+
+%%func to  flush mailbox
 all_messages(Messages) ->
   receive
     AnyMessage ->
@@ -138,11 +142,13 @@ all_messages(Messages) ->
     lists:reverse(Messages)
   end.
 
+
+%%function that send the graph of the nn
 handle_common({call,From}, {_XFrom,get_graph},State = #nn_agent_state{},_State) ->
   {keep_state, State,[{reply,From,State#nn_agent_state.graph}]};
 
 
-
+%%function that reset of the nn
 handle_common({call,From}, {_XFrom,reset},State = #nn_agent_state{},_State) ->
   VertexList= getVerticesList(State#nn_agent_state.graph),
   [gen_statem:cast(Pid,{State#nn_agent_state.id,reset})||{_V,{_,_,Pid,_,_,_}}<-VertexList],
@@ -150,15 +156,13 @@ handle_common({call,From}, {_XFrom,reset},State = #nn_agent_state{},_State) ->
     , State#nn_agent_state{},[{reply,From,ok}]};
 
 
+%%command  the nn to mutate
 handle_common({call,From}, {_XFrom,mutate},State = #nn_agent_state{},_State) ->
   mutate_generator:mutateAgent(State#nn_agent_state.graph),
   {keep_state, State,[{reply,From,State#nn_agent_state.graph}]};
 
 
-
-
-
-
+%% deal with neuron crash for some reason
 handle_common(info, {'EXIT',PID,_},State = #nn_agent_state{},CuRR_State) ->
   NN_id=State#nn_agent_state.id,
   G=State#nn_agent_state.graph,
@@ -169,12 +173,12 @@ handle_common(info, {'EXIT',PID,_},State = #nn_agent_state{},CuRR_State) ->
 
   {V,Kind,_OldPid,PID1,E,Bias,AF}= getinfoByID(PID,VertexList),
   NewPID=neuron2:start_link(self(),PID1,Kind),
- E22= digraph:add_vertex(G,V,{Kind,NewPID,PID1,E,Bias,AF}),
+ digraph:add_vertex(G,V,{Kind,NewPID,PID1,E,Bias,AF}),
   sendInfo(G,NN_id,[{V,{Kind,NewPID,PID1,E,Bias,AF}}]),
-  VertexList2= getVerticesList(State),
+  %VertexList2= getVerticesList(State),
   if
       CuRR_State=:=wait_for_result->
-        A=deleteResults([]),
+        deleteResults([]),
         sendInput(State#nn_agent_state.input_list,State#nn_agent_state.sensor_list),
       {keep_state, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new()}};
     true->{keep_state, State}
@@ -201,7 +205,7 @@ terminate(_Reason, _StateName, State = #nn_agent_state{}) ->
   stopProcess(VertexList),
 %%L= [{is_process_alive(Pid1),Pid}||{_V,{_,Pid1,Pid,_,_,_}}<-VertexList],
 %% L2= [gen_statem:stop(Pid)||{true,Pid}<-L],
- X= all_messages([]),
+ all_messages([]),
 ok.
 
 %% @private
@@ -210,6 +214,9 @@ code_change(_OldVsn, StateName, State = #nn_agent_state{}, _Extra) ->
   {ok, StateName, State}.
 
 %%%===================================================================
+
+
+%%func to create new NN
 createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,PID1)->
   G=new([acyclic]),
   SensorsL=createSensors(G,SensorNum,[]),
@@ -218,11 +225,11 @@ createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,PID1)->
 
   createSensorsEdges(G,SensorNum,NumOfNeuronsEachLayer,NumOfNeuronsEachLayer),
   createNeuronsLayers(G,NumOfLayers,NumOfNeuronsEachLayer),
-  createAcoautorLayers(G,NumOfLayers*NumOfNeuronsEachLayer,
+  createActuatorLayers(G,NumOfLayers*NumOfNeuronsEachLayer,
     NumOfNeuronsEachLayer*(NumOfLayers-1) ,ActuatorNum,ActuatorNum),
   A=digraph:vertices(G),
-  B=digraph:edges(G),
-  C= [digraph:edge(G,E) || E <- B],
+ % B=digraph:edges(G),
+ % C= [digraph:edge(G,E) || E <- B],
   VertexList= [digraph:vertex(G,V) || V <- A],
 %  O= digraph:add_edge(G,neuron10, neuron2,rand:uniform(5)),
   sendInfo(G,PID1,VertexList),
@@ -231,7 +238,7 @@ createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,PID1)->
   X.
 
 
-
+%%func to create new NN duplicate another NN
 createNN(G,ID)->
   G_new=digraph:new([acyclic]),
   A=digraph:vertices(G),
@@ -239,13 +246,13 @@ createNN(G,ID)->
   C= [digraph:edge(G,E) || E <- B],
   VertexList= [digraph:vertex(G,V) || V <- A],
   VertexList2= [add_ver_to_new_graph(G_new,K,V,ID,Bias,AF) || {V,{K,_Pid,_ID2,ID,Bias,AF}} <- VertexList],
-  A2=digraph:vertices(G_new),
+  %A2=digraph:vertices(G_new),
   Map=maps:from_list(VertexList2),
   %VertexList2= [{V,{K,genarateIdfromAtom(K)}} || {V,{K,_Pid,_ID2}} <- VertexList],
   [digraph:add_edge(G_new,maps:get(A,Map),maps:get(B,Map),W) || {_,A,B,W} <- C],
   A1=digraph:vertices(G_new),
-  B2=digraph:edges(G_new),
-  C2= [digraph:edge(G_new,E) || E <- B2],
+ % B2=digraph:edges(G_new),
+  %C2= [digraph:edge(G_new,E) || E <- B2],
   VertexList_new= [digraph:vertex(G_new,V) || V <- A1],
   sendInfo(G_new,ID,VertexList_new),
 
@@ -256,7 +263,7 @@ createNN(G,ID)->
   X.
 
 
-
+%%add neuron to the graph
 add_ver_to_new_graph(G_new,K,V,ID2,Bias,AF)->
   ID=genarateIdfromAtom(K),
   PID=neuron2:start_link(self(),ID,K),
@@ -265,7 +272,7 @@ add_ver_to_new_graph(G_new,K,V,ID2,Bias,AF)->
 
 
 
-
+%%genarate unic ID
 genarateIdfromAtom(sensor)->list_to_atom(lists:flatten(io_lib:format("sensor~p", [generate_id()])));
 genarateIdfromAtom(neuron)->list_to_atom(lists:flatten(io_lib:format("neuron~p", [generate_id()])));
 genarateIdfromAtom(actuator)->list_to_atom(lists:flatten(io_lib:format("actuator~p", [generate_id()]))).
@@ -279,25 +286,26 @@ genarateIdfromAtom(actuator)->list_to_atom(lists:flatten(io_lib:format("actuator
 
 
 
-
+%%func to get vertices from graph
 getVerticesList(State)->
 G=State#nn_agent_state.graph,
 A=digraph:vertices(G),
 [digraph:vertex(G,V) || V <- A].
 
 
+
+%%func to send input to graph neurons
 sendInput(_InVector,[])->ok;
 sendInput([],[{_ID2,_ID,PID}|T2])->
   gen_statem:cast(PID,{insert_input,self(),0}),
   sendInput([],T2);
-
 sendInput([H|T],[{_ID2,_ID,PID}|T2])->
   gen_statem:cast(PID,{insert_input,self(),H}),
   sendInput(T,T2).
 
 
 
-
+%%func to create sensor
 createSensors(_G,0,L)->L;
 createSensors(G,N,L)->
   ID=list_to_atom(lists:flatten(io_lib:format("sensor~p", [N]))),
@@ -309,7 +317,7 @@ createSensors(G,N,L)->
   digraph:add_vertex(G,ID,{sensor,PID,ID2,ID,0,relu}),
   createSensors(G,N-1,L2).
 
-
+%%func to create neuron
 createNeurons(_G, 0) ->ok;
 createNeurons(G,N) ->
   ID=list_to_atom(lists:flatten(io_lib:format("neuron~p", [N]))),
@@ -321,6 +329,8 @@ createNeurons(G,N) ->
   createNeurons(G, N-1).
 
 
+
+%%func to create actuators
 createActuators(_, 0,L) -> L;
 createActuators(G, N,L) ->
   ID=list_to_atom(lists:flatten(io_lib:format("actuator~p", [N]))),
@@ -335,7 +345,7 @@ createActuators(G, N,L) ->
   createActuators(G,N-1,L2).
 
 
-
+%%func to create sensor edges
 createSensorsEdges(_,0,_,_)-> ok;
 createSensorsEdges(G,S,0,T)-> createSensorsEdges(G,S-1,T,T);
 createSensorsEdges(G,S,N,T) ->
@@ -345,8 +355,10 @@ createSensorsEdges(G,S,N,T) ->
   %digraph:add_edge(G,B,A,1),
   createSensorsEdges(G,S,N-1,T).
 
-createNeuronsLayers(_,PrevLayer, _,_,_,Prev3) when PrevLayer =:= Prev3->ok;
 
+
+%%func to create neurons edges
+createNeuronsLayers(_,PrevLayer, _,_,_,Prev3) when PrevLayer =:= Prev3->ok;
 createNeuronsLayers(G,PrevLayer, NextLayer,Prev2,Next2,Prev3) when NextLayer =:= Prev2 ->
   createNeuronsLayers(G,PrevLayer-1, Next2,Prev2,Next2,Prev3);
 createNeuronsLayers(G,PrevLayer, NextLayer,Prev2,Next2,Prev3) ->
@@ -368,18 +380,18 @@ createNeuronsLayers(G, NumOfLayers, NumOfNeuronsEachLayer) ->
 
 
 
-createAcoautorLayers(_, IDX1, IDX2, _,_) when IDX1 =:= IDX2->ok;
-createAcoautorLayers(G, IDX1, IDX2, 0,ActuatorNum)->
-  createAcoautorLayers(G, IDX1-1, IDX2, ActuatorNum,ActuatorNum);
-createAcoautorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
+createActuatorLayers(_, IDX1, IDX2, _,_) when IDX1 =:= IDX2->ok;
+createActuatorLayers(G, IDX1, IDX2, 0,ActuatorNum)->
+  createActuatorLayers(G, IDX1-1, IDX2, ActuatorNum,ActuatorNum);
+createActuatorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
   A=list_to_atom(lists:flatten(io_lib:format("actuator~p", [ActuatorNumIDX]))),
   B=list_to_atom(lists:flatten(io_lib:format("neuron~p", [IDX1]))),
   %digraph:add_edge(G,B, A,1),
   digraph:add_edge(G,B, A,randomWeight()),
-  createAcoautorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum).
+  createActuatorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum).
 
 
-
+%%func to send info to graph neurons for initialize
 sendInfo(_,_MID, []) ->ok;
 sendInfo(G,MID, [{V,{_,_Pid,ID2,_ID,Bias,AF}}|T]) ->
   Neighbours_in =digraph:in_edges(G,V),
@@ -389,25 +401,29 @@ sendInfo(G,MID, [{V,{_,_Pid,ID2,_ID,Bias,AF}}|T]) ->
   F= [digraph:edge(G,E) || E <- Neighbours_Out],
   Z2=[getPID(G,B2) || {_,_,B2,_} <- F],
   %Pid ! {self(),{V,t,Z,Z2}},
-  X=gen_statem:call(ID2,{MID,{ID2,AF,Z,Z2,Bias}}),
+  gen_statem:call(ID2,{MID,{ID2,AF,Z,Z2,Bias}}),
   sendInfo(G,MID,T).
 
 
 getPID(G,V)->
-  {_,{_,PID,ID2,_ID,_,_}}=digraph:vertex(G,V),
+  {_,{_,_PID,ID2,_ID,_,_}}=digraph:vertex(G,V),
   ID2.
 
 
-inverse(L) ->[{Y,X} || {X,Y} <- L].
+%inverse(L) ->[{Y,X} || {X,Y} <- L].
 
 
 %%%===================================================================
 
+
+%%generate unic Weight
 generate_id() ->
   {MegaSeconds,Seconds,MicroSeconds} = now(),
   1/(MegaSeconds*1000000 + Seconds + MicroSeconds/1000000).
 
 
+
+%%generate random weight between 5 to -5
 randomWeight()->
   X=5*(1.0 - rand:uniform()),
 
@@ -419,7 +435,7 @@ randomWeight()->
 
 
 
-
+%%%get info from graph by pid
 getinfoByID(_PID, []) ->ok;
 getinfoByID(PID, [{V,{Kind,OldPid,PID1,E,Bias,AF}}|T]) ->
   if
@@ -428,6 +444,8 @@ getinfoByID(PID, [{V,{Kind,OldPid,PID1,E,Bias,AF}}|T]) ->
   end
 .
 
+
+%%%reset neuron
 resetProcess([],_)->ok;
 resetProcess([{_V,{_,Pid1,Pid,_,_,_}}|T],NN_id)->
   X=is_process_alive(Pid1),
@@ -438,25 +456,22 @@ resetProcess([{_V,{_,Pid1,Pid,_,_,_}}|T],NN_id)->
       resetProcess(T,NN_id)
   end.
 
-stopProcess([])->ok;
-stopProcess([{_V,{_,Pid1,Pid,_,_,_}}|T])->
-  X=is_process_alive(Pid1),
-  if
-    X=:=true->   gen_statem:stop(Pid),
-      stopProcess(T);
-    true->stopProcess(T)
 
+%%% stop neurons
+stopProcess([])->ok;
+stopProcess([{_V,{_,Pid1,_Pid,_,_,_}}|T])->
+  try
+    gen_statem:stop(Pid1) of
+    _Result->stopProcess(T)
+  catch
+    _Reason:_Reason1->stopProcess(T)
   end.
 
 
+%%empty results from mailbox when reset
 deleteResults(L)->
   receive
-    {X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
+    {_X,{From,result,Result}}->deleteResults(L++[{From,result,Result}])
 
   after 0->L
-  end
-
-
-
-
-.
+  end.

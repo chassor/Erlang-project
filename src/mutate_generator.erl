@@ -13,7 +13,7 @@
 -export([mutateAgent/1, getName/1, getVerticesList/1, getEdgesList/1]).
 
 
-
+%%mutate using graph choose randomly how many mutate to make
 mutateAgent(G)->
   VerL=digraph:vertices(G),
   NumOfNeurons=length(VerL),
@@ -22,9 +22,10 @@ mutateAgent(G)->
   mutate(G,A).
 
 
+
+%%%choose randomly which mutate to commit
 mutate(_,0)->ok;
 mutate(G,A) ->
-%X=6,
   X=rand:uniform(7),
 case X of
   1->setBias(G,rand:uniform());
@@ -34,64 +35,59 @@ case X of
   5->removeEdge(G);
   6->changeWeight(G,nn_agent:randomWeight());
   7->changeAF(G)
-
-
 end,
-mutate(G,A-1)
-.
+mutate(G,A-1).
 
 
 
+%%%set new bias to random neuron
 setBias(G,NewBias) ->
-
-Edges_old=getEdgesList(G),
+  %Edges_old=getEdgesList(G),
   VertexList2= getVerticesList(G),
  VertexList3=filterSensors(VertexList2,[]),
-  {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList3)),VertexList3),
+  {V,{A,B1,C1,D,_E,AF}}=lists:nth(rand:uniform(length(VertexList3)),VertexList3),
   digraph:add_vertex(G,V,{A,B1,C1,D,NewBias,AF}),
-  Edges_new=getEdgesList(G),
-  VertexList2_new= getVerticesList(G),
+%  Edges_new=getEdgesList(G),
+ % VertexList2_new= getVerticesList(G),
  Rep= gen_statem:call(C1,{self(),newBias,NewBias}),
-
-  Rep
-.
+  Rep.
 
 
 
-
-addEdge(G,Weight,0)->ok;
+%%add randomly edge between two neurons
+addEdge(_G,_Weight,0)->ok;
 addEdge(G,Weight,Counter) ->
   VertexList= getVerticesList(G),
-  Edges_old=getEdgesList(G),
+  %Edges_old=getEdgesList(G),
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
-  {V1,{A1,B2,C3,D4,E5,_}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
+  {V1,{A1,_B2,C3,_D4,_E5,_}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
   EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or ( A1 =:= sensor)
   or (A =:=actuator),
-
   if
     EdgeAlreadyExist=:=true->addEdge(G,Weight,Counter-1) ;
     true ->
              Result=digraph:add_edge(G,V,V1,Weight),
       if
         is_tuple(Result) -> addEdge(G,Weight,Counter-1) ;
-        true -> VertexList_new= getVerticesList(G),
-                Edges_old_new=getEdgesList(G),
-          Rep1= gen_statem:call(C1,{self(),new_neighbour_out,C3}),
-          Rep2= gen_statem:call(C3,{self(),new_neighbour_in,{C1,Weight}}),
-          1
+        true ->
+%%          VertexList_new= getVerticesList(G),
+%%                Edges_old_new=getEdgesList(G),
+          gen_statem:call(C1,{self(),new_neighbour_out,C3}),
+          gen_statem:call(C3,{self(),new_neighbour_in,{C1,Weight}})
+
       end
 
   end.
 
-
-addNeuron(G,Weight1,Weight2,0)->ok;
+%%add randomly neuron between two neurons
+addNeuron(_G,_Weight1,_Weight2,0)->ok;
 addNeuron(G,Weight1,Weight2,Counter) ->
   VertexList= getVerticesList(G),
-  Edges_old=getEdgesList(G),
+ % Edges_old=getEdgesList(G),
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
-  {V1,{A1,B2,C3,D4,E5,E6}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
+  {V1,{A1,_B2,C3,_D4,_E5,_E6}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
   EdgeAlreadyExist= lists:member(V1,digraph:out_neighbours(G,V)) or (A1 =:= sensor)
     or (A =:=actuator ) ,
 
@@ -109,24 +105,25 @@ addNeuron(G,Weight1,Weight2,Counter) ->
           AF1=newAF(),
           digraph:add_vertex(G,ID2,{neuron,PID,ID2,ok,Bias,AF1}),
           M_PID=getName(self()),
-          Result2=digraph:add_edge(G,V,ID2,Weight1),
-          Result3=digraph:add_edge(G,ID2,V1,Weight2),
-          VertexList_new= getVerticesList(G),
-          Edges_old_new=getEdgesList(G),
-          X=gen_statem:call(ID2,{M_PID,{ID2,AF1,[{C1,Weight1}],[C3],Bias}}),
-          Rep1= gen_statem:call(C1,{self(),new_neighbour_out,ID2}),
-          Rep2= gen_statem:call(C3,{self(),new_neighbour_in,{ID2,Weight2}}),
-          1
+          digraph:add_edge(G,V,ID2,Weight1),
+          digraph:add_edge(G,ID2,V1,Weight2),
+          getVerticesList(G),
+          getEdgesList(G),
+          gen_statem:call(ID2,{M_PID,{ID2,AF1,[{C1,Weight1}],[C3],Bias}}),
+          gen_statem:call(C1,{self(),new_neighbour_out,ID2}),
+          gen_statem:call(C3,{self(),new_neighbour_in,{ID2,Weight2}})
+
       end
 
   end.
 
 
+%%%get edges list from graph
 getEdgesList(G)->
   B=digraph:edges(G),
   [digraph:edge(G,E) || E <- B].
 
-
+%%%get vertices list from graph
 getVerticesList(G)->
   VerL=digraph:vertices(G),
   [digraph:vertex(G,V) || V <- VerL].
@@ -134,7 +131,7 @@ getVerticesList(G)->
 
 
 
-
+%%%get vertices list from graph without sensors
 filterSensors([],L)->L;
 filterSensors([{A,{B,C,D,E,F,G}}|T],L) ->
  if
@@ -142,43 +139,50 @@ filterSensors([{A,{B,C,D,E,F,G}}|T],L) ->
    true->filterSensors(T,L++[{A,{B,C,D,E,F,G}}])
  end .
 
+
+%%%remove bias from randomly neuron
 removeBias(G) ->
   setBias(G,0).
 
+
+%%get name by pid
 getName(PID)->
    [{_,Name}|_T]=process_info(PID),
    Name.
 
+
+%%remove random edge from graph
 removeEdge(G) ->
   changeWeight(G,0).
 
+
+%%change random edge weight
 changeWeight(G,N) ->
   Edges_old=getEdgesList(G),
   {A,B,C,_D}=lists:nth(rand:uniform(length(Edges_old)),Edges_old),
-  Result=digraph:add_edge(G,A,B,C,N),
+  digraph:add_edge(G,A,B,C,N),
   {_V1,{_,_Pid,ID1,_ID,_Bias,_AF} }= digraph:vertex(G,B),
     {_V2,{_,_Pid1,ID2,_ID1,_Bias1,_AF2}}= digraph:vertex(G,C),
-  Edges_new=getEdgesList(G),
-  VertexList2_new= getVerticesList(G),
-  Rep= gen_statem:call(ID2,{self(),newWeight, {ID1,N}}),
+  %Edges_new=getEdgesList(G),
+  %VertexList2_new= getVerticesList(G),
+  gen_statem:call(ID2,{self(),newWeight, {ID1,N}}).
 
 
-1.
-
+%% change acitvation function on random neuron
 changeAF(G) ->
-
   NEWAF=newAF(),
-  Edges_old=getEdgesList(G),
+  getEdgesList(G),
   VertexList2= getVerticesList(G),
   VertexList3=filterSensors(VertexList2,[]),
   {V,{A,B1,C1,D,Bias,_AF}}=lists:nth(rand:uniform(length(VertexList3)),VertexList3),
   digraph:add_vertex(G,V,{A,B1,C1,D,Bias,NEWAF}),
-  Edges_new=getEdgesList(G),
-  VertexList2_new= getVerticesList(G),
+%%  Edges_new=getEdgesList(G),
+%%  VertexList2_new= getVerticesList(G),
   Rep= gen_statem:call(C1,{self(),newAF,NEWAF}),
-
   Rep.
 
+
+%%choose new activation func
 newAF() ->
  case rand:uniform(5) of
    1->relu;
