@@ -1,8 +1,0 @@
-digraph G {
-rankdir=LR;
-nodesep=0.001;center=true;
-dpi= 100 ;ratio="fill";size="14.7,7.3!";margin=0;  actuator1  [label=" actuator1\nBias: 0.012\nAF: relu",shape=box,fillcolor=cyan,style=filled]; 
-  actuator2  [label=" actuator2\nBias: 0.790\nAF: relu",shape=box,fillcolor=cyan,style=filled]; 
-  x1  [label="neuron\nBias: 0\nAF: relu",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true];
-  x2  [label=" neuron\nBias: 0.049\nAF: tanh",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true]; 
-  x3  [label=" neuron\nBias: 0.205\nAF: relu",shape=circle,fillcolor=chartreuse1,style=filled,width=1,height=1,fixedsize=true]; 

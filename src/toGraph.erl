@@ -21,22 +21,18 @@ generateGraph({Vertices,Edges})->
   L3=Vertices,
   Map=creatMapOfNewNames(L3,maps:new(),1),
   L2 = createNodesList(Map,L3,[]),
-
   L = [{maps:get(A,Map),maps:get(B,Map),C}||{_,A,B,C} <- L1],
-  %Vertices_final= [{A,maps:get(B,Map),C}||{A,B,C} <- L],
-
-
   Graph = { "G" , {digraph ,"->"} ,[],L2,L},
-  to_file( Graph ,"dor.png", "png"),
+  to_file( Graph ,"graph.png", "png"),
   Graph.
 
 to_file(Graph, File, Format) ->
-  {A1,A2,A3} = now(),
+  Y = erlang:timestamp(),
+  {A1,A2,A3}=Y,
   DotFile = lists:concat([File, ".dot-", A1, "-", A2, "-", A3]),
   to_dot(Graph, DotFile),
   DotCommant = lists:concat(["dot -T", Format, " -o", File, " ", DotFile]),
   X=os:cmd(DotCommant),
-
   file:delete(DotFile),
   X.
 
@@ -51,15 +47,9 @@ to_dot(Graph, File) ->
 
   % print graph
   io:format(IODevice, "~s ~s {~n", [GraphType, GraphId]),
-
-%io:format(IODevice, "size =\"100,100\";~n", []),
   io:format(IODevice, "rankdir=LR;~n", []),
-%  io:format(IODevice, "splines=line;~n", []),
   io:format(IODevice, "nodesep=0.001;center=true;~n", []),
   io:format(IODevice, "dpi= 100 ;ratio=\"fill\";size=\"14.7,7.3!\";margin=0;", []),
-%%  io:format(IODevice,  " label     = \"The title of the graph\";
-%%  labelloc  =  t;
-%%  fontsize  = 30;", []),
 
 
 
@@ -96,7 +86,6 @@ to_dot(Graph, File) ->
       {NodeOne, NodeTwo,Weight} = Edge,
       if
         Weight=/=0-> io:format(IODevice, "  ~s ~s ~s [label=~p] ;~n",[NodeOne, EdgeType, NodeTwo,float_to_list(Weight,[{decimals,3}])]);
-      %true-> io:format(IODevice, "  ~s ~s ~s [color=none] ;~n",[NodeOne, EdgeType, NodeTwo])
         true-> ok
       end
     end,
@@ -223,34 +212,23 @@ createFrame(Width,Height)->
   wxSizer:add(MainSizer, CounterSizer2, [{flag, ?wxEXPAND}]),
   wxSizer:add(MainSizer,Panel2, [{flag, ?wxEXPAND}]),
   wxWindow:setSizer(Frame, MainSizer),
-  %wxSizer:setSizeHints(MainSizer, Panel),
   wxWindow:setMinSize(Frame, wxWindow:getSize(Frame)),
   wxWindow:setMaxSize(Frame, wxWindow:getSize(Frame)),
   Vbox = wxBoxSizer:new(?wxVERTICAL),
   wxSizer:add(Vbox, Panel, [{flag, ?wxEXPAND}]),
-
-  %wxSizer:add(MainSizer, TextCtrlNeurons, [{flag, ?wxALL bor ?wxEXPAND}, {border, 8}]),
-
-
-
-  %PictureDrawScaled = wxImage:scale(PictureDraw, 1280, 720,[{quality,?wxIMAGE_QUALITY_HIGH}]),
   wxFrame:show(Frame),
   {Frame,Panel2,ResTXT,FitTXT,GenTXT,ProcessesTXT,InpTXT}.
 
 
 %%replace image of the graph in the frame
 replaceImage(Panel,Width,Height) ->
-PictureDraw1 = wxImage:new("dor.png"),
+PictureDraw1 = wxImage:new("graph.png"),
 PictureDraw=wxImage:rescale(PictureDraw1,Width,Height,[{quality,?wxIMAGE_QUALITY_HIGH}]),
 Image1 = wxBitmap:new(PictureDraw),
 Image = wxStaticBitmap:new(Panel,12,Image1),
   Image,
 F = fun(I, _) -> redraw(Image1,I) end,
 wxPanel:connect(Panel, paint, [{callback,F}]),
-%wxBitmap:destroy(Image1),
-% wxStaticBitmap:destroy(Image),
-% wxImage:destroy(PictureDraw1),
-% wxWindow:refresh(Panel,[{eraseBackground,false}]),
 Panel.
 
 redraw(Image, #wx{obj=Panel}) ->

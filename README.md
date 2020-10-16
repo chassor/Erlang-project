@@ -32,7 +32,7 @@ modular neuroevolution simulation using erlang processes as neurons
 
 * using gen_statem OTP for neurons
 * using gen_server OTP for master
-* using wx widegt for gui
+* using wx widegt for gui 
 * using Graphwiz package
 
 ### Built With
@@ -45,40 +45,48 @@ modular neuroevolution simulation using erlang processes as neurons
 
 
 install graphwiz package from graphwiz.org.
-Open folder and terminal for the 'master' node.
- compile the files and run the program from master
+Open src folder and ubuntu terminal for running the 'master' node.
+compile the files and run the program from master
 
 
-in terminal:
+in terminal, go to src folder and then:
 ```sh
 erl -name master
 ```
 
+in case of running heavy simulations its possible to increase the atom table size,
+the default is max=1048576, and its often not enough for heavy simulations.
+by adding +t #?max_number like this:
 
-in erlang shell:
+```sh
+erl +t ?SOME_NUMBER -name master/node1
+```
+
+to run the program in erlang shell:
 ```sh
 make:all().
 master:run().
 ```
 
-<h3>Submaster: </h3>
-Do the next stages for every other node, every node will be a population of NN's.
+<h3>populations: </h3>
+Do the next stages for every other node. each node will be a population of NN's.
 
 
 start erlang shell and insert the node name
 
 ```sh
-erl -sname nodex
+erl -sname nodeX
 ```
 if you use erlang long name:
 ```sh
-erl -name nodex@IP -setcookie bsp
+erl -name nodex@IP -setcookie Some_cookie
 ```
 compile all files if its another computer:
 ```sh
 make:all().
 ```
-no need to make startlink in the nodes its will be commit by the master using rpc
+no need to make startlink in the nodes its will be commit by the master using rpc.
+just need to make sure the connection is ok.
 
 
 <h3>Master: </h3>
@@ -90,7 +98,7 @@ erl -sname master
 
 if you use erlang long name:
 ```sh
-erl -name master@IP -setcookie bsp
+erl -name master@IP -setcookie Some_cookie
 ```
 compile all file:
 ```sh
@@ -109,9 +117,10 @@ master:run().
 * choose fitness func</b>. 
 * choose resolution of simulation.
 * choose number of sensors, neurons, actuators for initial NN. 
-* Insert the short/long names of all the nodes separated by comma .
+* Insert the short/long names of all the nodes separated by (,) .
 * Click 'start'
-* if there are no connection problem the simulation will start.
+* if there are no connection problems the simulation will start.
+* you can stop the simulation and run another one with different values
 <br />
 <br />
 

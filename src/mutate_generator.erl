@@ -42,13 +42,10 @@ mutate(G,A-1).
 
 %%%set new bias to random neuron
 setBias(G,NewBias) ->
-  %Edges_old=getEdgesList(G),
   VertexList2= getVerticesList(G),
  VertexList3=filterSensors(VertexList2,[]),
   {V,{A,B1,C1,D,_E,AF}}=lists:nth(rand:uniform(length(VertexList3)),VertexList3),
   digraph:add_vertex(G,V,{A,B1,C1,D,NewBias,AF}),
-%  Edges_new=getEdgesList(G),
- % VertexList2_new= getVerticesList(G),
  Rep= gen_statem:call(C1,{self(),newBias,NewBias}),
   Rep.
 
@@ -58,7 +55,6 @@ setBias(G,NewBias) ->
 addEdge(_G,_Weight,0)->ok;
 addEdge(G,Weight,Counter) ->
   VertexList= getVerticesList(G),
-  %Edges_old=getEdgesList(G),
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
   {V1,{A1,_B2,C3,_D4,_E5,_}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
@@ -71,8 +67,6 @@ addEdge(G,Weight,Counter) ->
       if
         is_tuple(Result) -> addEdge(G,Weight,Counter-1) ;
         true ->
-%%          VertexList_new= getVerticesList(G),
-%%                Edges_old_new=getEdgesList(G),
           gen_statem:call(C1,{self(),new_neighbour_out,C3}),
           gen_statem:call(C3,{self(),new_neighbour_in,{C1,Weight}})
 
@@ -84,7 +78,6 @@ addEdge(G,Weight,Counter) ->
 addNeuron(_G,_Weight1,_Weight2,0)->ok;
 addNeuron(G,Weight1,Weight2,Counter) ->
   VertexList= getVerticesList(G),
- % Edges_old=getEdgesList(G),
   {V,{A,B1,C1,D,E,AF}}=lists:nth(rand:uniform(length(VertexList)),VertexList),
   NEW_L=lists:delete({V,{A,B1,C1,D,E,AF}},VertexList),
   {V1,{A1,_B2,C3,_D4,_E5,_E6}}=lists:nth(rand:uniform(length(NEW_L)),NEW_L),
@@ -163,8 +156,6 @@ changeWeight(G,N) ->
   digraph:add_edge(G,A,B,C,N),
   {_V1,{_,_Pid,ID1,_ID,_Bias,_AF} }= digraph:vertex(G,B),
     {_V2,{_,_Pid1,ID2,_ID1,_Bias1,_AF2}}= digraph:vertex(G,C),
-  %Edges_new=getEdgesList(G),
-  %VertexList2_new= getVerticesList(G),
   gen_statem:call(ID2,{self(),newWeight, {ID1,N}}).
 
 
@@ -176,8 +167,6 @@ changeAF(G) ->
   VertexList3=filterSensors(VertexList2,[]),
   {V,{A,B1,C1,D,Bias,_AF}}=lists:nth(rand:uniform(length(VertexList3)),VertexList3),
   digraph:add_vertex(G,V,{A,B1,C1,D,Bias,NEWAF}),
-%%  Edges_new=getEdgesList(G),
-%%  VertexList2_new= getVerticesList(G),
   Rep= gen_statem:call(C1,{self(),newAF,NEWAF}),
   Rep.
 

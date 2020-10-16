@@ -87,14 +87,7 @@ idle(cast,{insert_input,_NN_manger_PID,W},State=#neuron2_state{kind=sensor})->
   [gen_statem:cast(Pid,{State#neuron2_state.id,forward,W}) || Pid <- Out_PIds],
   {keep_state, State#neuron2_state{acc=W}};
 
-%%idle(cast,{From,forward,Input},State=#neuron2_state{kind=neuron})->
-%%
-%%  In_PIds=State#neuron2_state.inputPIDs2,
-%%  Acc=State#neuron2_state.acc,
-%%  ToAdd=maps:get(In_PIds,From)*Input,
-%%
-%%  %[gen_statem:cast(Pid,{self(),forward,W}) || Pid <- Out_PIds],
-%%  {next_state,wait,State#neuron2_state{acc=Acc+ToAdd,inputPIDs2 = maps:remove(From,In_PIds)}};
+
 
 %% idle state when its actuator or neuron, wait for input
 idle(cast,{From,forward,Input},State=#neuron2_state{})->
@@ -113,7 +106,6 @@ idle(cast,{From,forward,Input},State=#neuron2_state{})->
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
           gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
-          %PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,
@@ -145,7 +137,6 @@ in_process(cast,{From,forward,Input},State=#neuron2_state{})->
         actuator->
           PIDmanger=State#neuron2_state.manger_pid,
           gen_statem:cast(PIDmanger,{State#neuron2_state.id,result,Result});
-   %       PIDmanger ! {self(),result,Result};
         sensor-> ok
 
       end,

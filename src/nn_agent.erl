@@ -86,11 +86,6 @@ NextStateName = wait_for_result,
 {next_state, NextStateName, State#nn_agent_state{input_list = InputList}}
   end ;
 
-
-
-
-
-
 idle(EventType, EventContent, Data) ->
   A=handle_common(EventType, EventContent, Data,idle),
 A.
@@ -101,18 +96,13 @@ wait_for_result(cast, {From,result,Result},State = #nn_agent_state{}) ->
   Act_PIds=State#nn_agent_state.actuator_list2,
   {_,ID}=maps:get(From,Act_PIds),
   ResultsMap2=State#nn_agent_state.results,
- % ResultsMap=maps:put(maps:get(From,Act_PIds),Result,ResultsMap2),
   ResultsMap=maps:put(ID,Result,ResultsMap2),
   Map2=maps:remove(From,Act_PIds),
- % A=all_messages([]),
   case maps:size(Map2) =:= 0 of
     true ->
-
          PID_manager=State#nn_agent_state.manger_pid,
-      ResultList=[B||{_A,B} <-maps:to_list(ResultsMap) ],
-     % PID_manager !{self(),result,ResultList},
+      ResultList=[B||{_A,B} <-maps:to_list(ResultsMap)],
      gen_statem:cast(PID_manager,{State#nn_agent_state.id,result,ResultList}),
-
       {next_state,idle, State#nn_agent_state{actuator_list2 = State#nn_agent_state.actuator_list,results = maps:new(),result_list = ResultList}};
     false->{keep_state,State#nn_agent_state{actuator_list2 = Map2,results = ResultsMap}}
 end;
@@ -175,7 +165,6 @@ handle_common(info, {'EXIT',PID,_},State = #nn_agent_state{},CuRR_State) ->
   NewPID=neuron2:start_link(self(),PID1,Kind),
  digraph:add_vertex(G,V,{Kind,NewPID,PID1,E,Bias,AF}),
   sendInfo(G,NN_id,[{V,{Kind,NewPID,PID1,E,Bias,AF}}]),
-  %VertexList2= getVerticesList(State),
   if
       CuRR_State=:=wait_for_result->
         deleteResults([]),
@@ -200,7 +189,6 @@ handle_common(_,_,State = #nn_agent_state{},_State) ->
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
 terminate(_Reason, _StateName, State = #nn_agent_state{}) ->
-
   VertexList= getVerticesList(State),
   stopProcess(VertexList),
 %%L= [{is_process_alive(Pid1),Pid}||{_V,{_,Pid1,Pid,_,_,_}}<-VertexList],
@@ -222,18 +210,13 @@ createNN(SensorNum,ActuatorNum,NumOfLayers,NumOfNeuronsEachLayer,PID1)->
   SensorsL=createSensors(G,SensorNum,[]),
   createNeurons(G,NumOfNeuronsEachLayer*NumOfLayers),
   ActL=createActuators(G,ActuatorNum,[]),
-
   createSensorsEdges(G,SensorNum,NumOfNeuronsEachLayer,NumOfNeuronsEachLayer),
   createNeuronsLayers(G,NumOfLayers,NumOfNeuronsEachLayer),
   createActuatorLayers(G,NumOfLayers*NumOfNeuronsEachLayer,
     NumOfNeuronsEachLayer*(NumOfLayers-1) ,ActuatorNum,ActuatorNum),
   A=digraph:vertices(G),
- % B=digraph:edges(G),
- % C= [digraph:edge(G,E) || E <- B],
   VertexList= [digraph:vertex(G,V) || V <- A],
-%  O= digraph:add_edge(G,neuron10, neuron2,rand:uniform(5)),
   sendInfo(G,PID1,VertexList),
-
   X= {G,SensorsL,ActL},
   X.
 
@@ -245,20 +228,15 @@ createNN(G,ID)->
   B=digraph:edges(G),
   C= [digraph:edge(G,E) || E <- B],
   VertexList= [digraph:vertex(G,V) || V <- A],
-  VertexList2= [add_ver_to_new_graph(G_new,K,V,ID,Bias,AF) || {V,{K,_Pid,_ID2,ID,Bias,AF}} <- VertexList],
-  %A2=digraph:vertices(G_new),
+  VertexList2= [add_ver_to_new_graph(G_new,K,V,ID10,Bias,AF) || {V,{K,_Pid,_ID2,ID10,Bias,AF}} <- VertexList],
   Map=maps:from_list(VertexList2),
-  %VertexList2= [{V,{K,genarateIdfromAtom(K)}} || {V,{K,_Pid,_ID2}} <- VertexList],
-  [digraph:add_edge(G_new,maps:get(A,Map),maps:get(B,Map),W) || {_,A,B,W} <- C],
+  [digraph:add_edge(G_new,maps:get(A30,Map),maps:get(B30,Map),W) || {_,A30,B30,W} <- C],
   A1=digraph:vertices(G_new),
- % B2=digraph:edges(G_new),
-  %C2= [digraph:edge(G_new,E) || E <- B2],
   VertexList_new= [digraph:vertex(G_new,V) || V <- A1],
   sendInfo(G_new,ID,VertexList_new),
-
-  SensL1=[{ID,Pid,ID2} || {_V,{sensor,Pid,ID2,ID,_,_}} <- VertexList_new],
+  SensL1=[{ID20,Pid,ID2} || {_V,{sensor,Pid,ID2,ID20,_,_}} <- VertexList_new],
   SensL=lists:sort(SensL1),
-  ActL=[{ID2,{Pid,ID}} ||  {_V,{actuator,Pid,ID2,ID,_,_}} <- VertexList_new],
+  ActL=[{ID2,{Pid,ID30}} ||  {_V,{actuator,Pid,ID2,ID30,_,_}} <- VertexList_new],
   X= {G_new,SensL,ActL},
   X.
 
@@ -276,14 +254,6 @@ add_ver_to_new_graph(G_new,K,V,ID2,Bias,AF)->
 genarateIdfromAtom(sensor)->list_to_atom(lists:flatten(io_lib:format("sensor~p", [generate_id()])));
 genarateIdfromAtom(neuron)->list_to_atom(lists:flatten(io_lib:format("neuron~p", [generate_id()])));
 genarateIdfromAtom(actuator)->list_to_atom(lists:flatten(io_lib:format("actuator~p", [generate_id()]))).
-
-
-
-
-
-
-
-
 
 
 %%func to get vertices from graph
@@ -311,8 +281,6 @@ createSensors(G,N,L)->
   ID=list_to_atom(lists:flatten(io_lib:format("sensor~p", [N]))),
   ID2=list_to_atom(lists:flatten(io_lib:format("sensor~p", [generate_id()]))),
   PID=neuron2:start_link(self(),ID2,sensor),
-  %PID=sensor:generate_sensor(self(),node()),
-  % NAME=list_to_atom(lists:flatten(io_lib:format("sensor~p", [N]))),
   L2=[{ID,PID,ID2}]++L,
   digraph:add_vertex(G,ID,{sensor,PID,ID2,ID,0,relu}),
   createSensors(G,N-1,L2).
@@ -323,7 +291,6 @@ createNeurons(G,N) ->
   ID=list_to_atom(lists:flatten(io_lib:format("neuron~p", [N]))),
   ID2=list_to_atom(lists:flatten(io_lib:format("neuron~p", [generate_id()]))),
   PID=neuron2:start_link(self(),ID2,neuron),
-  %PID=neuron:generate_neuron(self(),node()),
   Bias=rand:uniform(),
   digraph:add_vertex(G,ID,{neuron,PID,ID2,ok,Bias,relu}),
   createNeurons(G, N-1).
@@ -335,10 +302,7 @@ createActuators(_, 0,L) -> L;
 createActuators(G, N,L) ->
   ID=list_to_atom(lists:flatten(io_lib:format("actuator~p", [N]))),
   ID2=list_to_atom(lists:flatten(io_lib:format("actuator~p", [generate_id()]))),
-
   PID=neuron2:start_link(self(),ID2,actuator),
-  % PID=actuator:generate_actuator(self(),node()),
-%  NAME=list_to_atom(lists:flatten(io_lib:format("actuator~p", [N]))),
   L2=[{ID2,{PID,ID}}]++L,
   Bias=rand:uniform(),
   digraph:add_vertex(G,ID,{actuator,PID,ID2,ID,Bias,relu}),
@@ -352,10 +316,7 @@ createSensorsEdges(G,S,N,T) ->
   A=list_to_atom(lists:flatten(io_lib:format("neuron~p", [N]))),
   B=list_to_atom(lists:flatten(io_lib:format("sensor~p", [S]))),
   digraph:add_edge(G,B,A,randomWeight()),
-  %digraph:add_edge(G,B,A,1),
   createSensorsEdges(G,S,N-1,T).
-
-
 
 %%func to create neurons edges
 createNeuronsLayers(_,PrevLayer, _,_,_,Prev3) when PrevLayer =:= Prev3->ok;
@@ -365,7 +326,6 @@ createNeuronsLayers(G,PrevLayer, NextLayer,Prev2,Next2,Prev3) ->
   A=list_to_atom(lists:flatten(io_lib:format("neuron~p", [NextLayer]))),
   B=list_to_atom(lists:flatten(io_lib:format("neuron~p", [PrevLayer]))),
   digraph:add_edge(G,B, A,randomWeight()),
-  %digraph:add_edge(G,B, A,1),
   createNeuronsLayers(G,PrevLayer, NextLayer-1,Prev2,Next2,Prev3).
 
 
@@ -378,15 +338,12 @@ createNeuronsLayers(G, NumOfLayers, NumOfNeuronsEachLayer) ->
   createNeuronsLayers(G, NumOfLayers-1, NumOfNeuronsEachLayer).
 
 
-
-
 createActuatorLayers(_, IDX1, IDX2, _,_) when IDX1 =:= IDX2->ok;
 createActuatorLayers(G, IDX1, IDX2, 0,ActuatorNum)->
   createActuatorLayers(G, IDX1-1, IDX2, ActuatorNum,ActuatorNum);
 createActuatorLayers(G, IDX1, IDX2, ActuatorNumIDX,ActuatorNum) ->
   A=list_to_atom(lists:flatten(io_lib:format("actuator~p", [ActuatorNumIDX]))),
   B=list_to_atom(lists:flatten(io_lib:format("neuron~p", [IDX1]))),
-  %digraph:add_edge(G,B, A,1),
   digraph:add_edge(G,B, A,randomWeight()),
   createActuatorLayers(G,IDX1,IDX2,ActuatorNumIDX-1,ActuatorNum).
 
@@ -400,7 +357,6 @@ sendInfo(G,MID, [{V,{_,_Pid,ID2,_ID,Bias,AF}}|T]) ->
   Neighbours_Out=digraph:out_edges(G,V),
   F= [digraph:edge(G,E) || E <- Neighbours_Out],
   Z2=[getPID(G,B2) || {_,_,B2,_} <- F],
-  %Pid ! {self(),{V,t,Z,Z2}},
   gen_statem:call(ID2,{MID,{ID2,AF,Z,Z2,Bias}}),
   sendInfo(G,MID,T).
 
@@ -410,15 +366,12 @@ getPID(G,V)->
   ID2.
 
 
-%inverse(L) ->[{Y,X} || {X,Y} <- L].
-
-
 %%%===================================================================
 
 
 %%generate unic Weight
 generate_id() ->
-  {MegaSeconds,Seconds,MicroSeconds} = now(),
+  {MegaSeconds,Seconds,MicroSeconds} = erlang:timestamp(),%%replace erlang:now()
   1/(MegaSeconds*1000000 + Seconds + MicroSeconds/1000000).
 
 
