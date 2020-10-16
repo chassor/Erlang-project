@@ -1,10 +1,10 @@
 %%%-------------------------------------------------------------------
-%%% @author DOR
+%%% @author hananel assor, dor avni
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
 %%%
 %%% @end
-%%% Created : 10. Oct 2020 1:10 PM
+%%% Created : 03. Oct 2020 15:55
 %%%-------------------------------------------------------------------
 -module(master).
 -author("DOR").

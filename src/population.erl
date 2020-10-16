@@ -1,7 +1,11 @@
 %%%-------------------------------------------------------------------
-%%% @author DOR
+%%% @author hananel assor, dor avni
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
+%%%
+%%% @end
+%%% Created : 03. Oct 2020 15:55
+%%%-------------------------------------------------------------------
 -module(population).
 -author("DOR").
 -behaviour(gen_statem).

@@ -1,10 +1,10 @@
 %%%-------------------------------------------------------------------
-%%% @author chass
+%%% @author hananel assor, dor avni
 %%% @copyright (C) 2020, <COMPANY>
 %%% @doc
 %%%
 %%% @end
-%%% Created : 04. Oct 2020 18:49
+%%% Created : 03. Oct 2020 15:55
 %%%-------------------------------------------------------------------
 -module(nn_agent).
 -author("chass").

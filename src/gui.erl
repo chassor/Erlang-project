@@ -1,3 +1,11 @@
+%%%-------------------------------------------------------------------
+%%% @author hananel assor, dor avni
+%%% @copyright (C) 2020, <COMPANY>
+%%% @doc
+%%%
+%%% @end
+%%% Created : 03. Oct 2020 15:55
+%%%-------------------------------------------------------------------
 -module(gui).
 -behaviour(wx_object).
 -import(util,[integer_to_atom/1]).
